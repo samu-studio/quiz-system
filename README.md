@@ -25,10 +25,9 @@ für das eigene Betriebssystem wählen:
 ZIP entpacken, Startdatei doppelklicken – fertig (siehe [Schnellstart](#schnellstart)).
 Ältere Versionen gibt es unter [Releases](../../releases).
 
-> Die Release-ZIPs enthalten **kein** Node.js (zu groß). Entweder [Node.js](https://nodejs.org)
-> (aktuelle LTS) einmal installieren, oder eine portable Node-Binary in den Ordner `node/`
-> legen (siehe unten). Beim Update aus einer älteren Version holt `GetOldData` das portable
-> Node automatisch mit.
+> **Node.js wird benötigt, ist aber nicht enthalten** – weder im Repository noch in den
+> Release-ZIPs. Einmalig [Node.js (LTS) herunterladen](https://nodejs.org/de/download) und
+> installieren oder portabel in den Ordner `node/` legen, Details im [Schnellstart](#schnellstart).
 
 ## Spiele
 
@@ -61,15 +60,23 @@ Codebase, Kommentare und UI sind auf Deutsch.
 
 ## Schnellstart
 
-1. Release-ZIP [herunterladen](../../releases/latest) und auf dem Host-Rechner entpacken
-   (oder diesen Ordner per USB/ZIP kopieren).
-2. Passende Startdatei für das Betriebssystem starten:
+1. **Node.js installieren** (einmalig, nur auf dem Host-Rechner): unter
+   **[nodejs.org/de/download](https://nodejs.org/de/download)** den Installer der aktuellen
+   **LTS-Version** für das eigene System laden und durchklicken. Unter Linux geht auch der
+   Paketmanager (z. B. `sudo apt install nodejs`). Prüfen im Terminal: `node --version`.
+   Die Handys brauchen nichts – nur einen Browser. Ohne Installation geht es auch portabel,
+   siehe [unten](#optional-portables-nodejs-ohne-installation).
+2. Release-ZIP [herunterladen](../../releases/latest) und auf dem Host-Rechner entpacken.
+3. Passende Startdatei für das Betriebssystem starten:
    - **Windows:** `Start-Windows.bat` (Doppelklick)
    - **macOS:** `Start-macOS.command` (Doppelklick)
    - **Linux:** `Start-Linux.sh` (im Terminal `bash Start-Linux.sh`, oder ausführbar machen)
-3. Es öffnet sich automatisch der **Bildschirm** im Browser. Im schwarzen Fenster stehen
+
+   Findet die Startdatei kein Node.js, meldet sie das mit einem Hinweis – dann Schritt 1
+   nachholen bzw. die Startdatei nach der Installation neu starten.
+4. Es öffnet sich automatisch der **Bildschirm** im Browser. Im schwarzen Fenster stehen
    die Adressen für die Handys, z. B. `http://192.168.0.100:8080/`.
-4. Handys im **gleichen WLAN** öffnen die passende Adresse – **die Rolle steckt im Pfad**:
+5. Handys im **gleichen WLAN** öffnen die passende Adresse – **die Rolle steckt im Pfad**:
 
    | Adresse                   | Rolle                           |
    |---------------------------|---------------------------------|
@@ -81,18 +88,30 @@ Codebase, Kommentare und UI sind auf Deutsch.
    (Tab „🎮 Spiel" → „📱 QR-Code am Bildschirm") – Handys scannen und sind sofort Spieler,
    ohne die Adresse einzutippen.
 
-> **Kein Node.js auf dem Zielrechner?** Kein Problem – im Ordner `node/` liegen portable
-> Node-Binaries pro System, die Startdateien wählen automatisch die passende:
->
-> | Ordner                  | System                           |
-> |-------------------------|----------------------------------|
-> | `node/win-x64/node.exe` | Windows 64-bit                   |
-> | `node/linux-x64/node`   | Linux 64-bit (PC/Laptop)         |
-> | `node/linux-arm64/node` | Linux ARM64 (z. B. Raspberry Pi) |
-> | `node/mac-x64/node`     | macOS Intel *(leer)*             |
-> | `node/mac-arm64/node`   | macOS Apple Silicon *(leer)*     |
->
-> Fehlt eine Binary, fällt die Startdatei automatisch auf ein installiertes System-Node zurück.
+### Optional: portables Node.js (ohne Installation)
+
+Darf auf dem Host-Rechner nichts installiert werden, lässt sich Node.js auch portabel im
+Quiz-Ordner mitnehmen. Der Ordner `node/` ist nicht im Download enthalten und muss selbst
+angelegt werden: auf [nodejs.org/de/download](https://nodejs.org/de/download) statt des
+Installers das **Archiv** (Windows: `.zip`, macOS/Linux: `.tar.gz`/`.tar.xz`) für das System
+laden, entpacken und nur die Node-Datei an die passende Stelle legen:
+
+```
+quiz_system/
+├── server.js
+├── Start-Windows.bat / Start-macOS.command / Start-Linux.sh
+└── node/
+    ├── win-x64/node.exe     ← Windows 64-bit (aus dem .zip: node.exe)
+    ├── linux-x64/node       ← Linux 64-bit, PC/Laptop (aus dem Archiv: bin/node)
+    ├── linux-arm64/node     ← Linux ARM64, z. B. Raspberry Pi (bin/node)
+    ├── mac-x64/node         ← macOS Intel (bin/node)
+    └── mac-arm64/node       ← macOS Apple Silicon (bin/node)
+```
+
+Es reicht der Unterordner für das System, auf dem das Quiz laufen soll. Die Startdateien
+nehmen bevorzugt dieses portable Node und fallen sonst auf ein installiertes Node.js zurück.
+Den so vorbereiteten Ordner kann man per USB-Stick auf beliebige Rechner kopieren; bei einem
+Update holt `GetOldData` den `node/`-Ordner automatisch aus der alten Version mit.
 
 ---
 
