@@ -1,0 +1,42 @@
+# Release-ZIPs bauen und an ein GitHub-Release haengen, sobald ein Versions-Tag
+# (v8, v8.1, …) gepusht wird. Nutzt dasselbe tools/release.js wie Release.sh/.bat –
+# keine npm-Abhaengigkeiten, nur das Node der Runner-VM.
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Vorhandener Tag, fuer den das Release (neu) gebaut wird, z. B. v8'
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    env:
+      TAG: ${{ github.event.inputs.tag || github.ref_name }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 'lts/*'
+
+      - name: ZIPs bauen (win, linux, mac)
+        run: node tools/release.js alle "$TAG"
+
+      - name: GitHub-Release anlegen bzw. ZIPs ersetzen
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" release/*.zip --clobber
+          else
+            gh release create "$TAG" release/*.zip --title "Quiz System $TAG" --generate-notes
+          fi

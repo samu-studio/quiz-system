@@ -1,0 +1,14 @@
+node/
+release/
+config.json
+config.json.*
+state.json
+public/backgrounds/
+public/audio/
+public/pause/
+public/music/
+public/soundboard/
+*.log
+*.tmp
+.DS_Store
+Thumbs.db

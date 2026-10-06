@@ -1,0 +1,886 @@
+<!DOCTYPE html>
+<html lang="de" data-theme="neon">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+<meta name="theme-color" content="#0b0f1a" />
+<title>Quiz System</title>
+<link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+
+<!-- Verbindungs-Overlay -->
+<div id="conn-overlay" class="overlay hidden">
+  <div class="overlay-box">
+    <div class="spinner"></div>
+    <p id="conn-text">Verbinde…</p>
+  </div>
+</div>
+
+<!-- Name-Overlay (nur Spieler) -->
+<div id="name-overlay" class="overlay hidden">
+  <div class="overlay-box">
+    <h2>Wie heißt du?</h2>
+    <input id="name-input" type="text" maxlength="24" placeholder="Dein Name" autocomplete="off" />
+    <button id="name-submit" class="btn btn-primary">Mitspielen</button>
+  </div>
+</div>
+
+<!-- Master-Login-Overlay (nur bei /master) -->
+<div id="master-gate" class="overlay hidden">
+  <div class="overlay-box">
+    <h2>🎛️ Master-Login</h2>
+    <p class="muted small">Dieser Bereich ist passwortgeschützt.</p>
+    <input id="gate-pass" type="password" placeholder="Admin-Passwort" autocomplete="off" />
+    <button id="gate-login" class="btn btn-primary">Anmelden</button>
+    <p id="gate-msg" class="muted small"></p>
+    <button id="gate-player" class="btn btn-ghost small">Ich bin doch Spieler</button>
+  </div>
+</div>
+
+<!-- Bestaetigungs-Dialog (ersetzt das System-confirm) -->
+<div id="confirm-overlay" class="overlay hidden">
+  <div class="overlay-box">
+    <h2 id="confirm-title">Bestätigen</h2>
+    <p id="confirm-msg" class="muted"></p>
+    <div class="overlay-actions">
+      <button id="confirm-cancel" class="btn btn-ghost">Abbrechen</button>
+      <button id="confirm-ok" class="btn btn-primary">OK</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== BILDSCHIRM ===================== -->
+<main id="view-screen" class="view hidden">
+  <!-- Design-Hintergrund (Bild/Effekte/Vignette) – nur Bildschirm, per JS befuellt -->
+  <div id="screen-bg"></div>
+  <!-- Maximal-Lautstaerke (nur dieses Geraet): erscheint, wenn die Maus an den linken Rand geht -->
+  <div id="screen-volume" class="screen-volume">
+    <div class="sv-panel">
+      <span id="screen-volume-icon" class="sv-icon">🔊</span>
+      <input id="screen-volume-range" class="sv-range" type="range" min="0" max="100" step="1" value="100" aria-label="Maximale Lautstärke" />
+      <span id="screen-volume-val" class="sv-val">100 %</span>
+    </div>
+  </div>
+  <header class="screen-bar">
+    <span id="screen-title" class="screen-title">Quiz System</span>
+    <span id="self-status-screen" class="self-dot" title="Verbindung"><span class="led"></span></span>
+  </header>
+  <section id="screen-stage" class="screen-stage">
+    <!-- Neutraler Wartezustand, wenn kein Spiel aktiv ist -->
+    <div id="screen-wait" class="wait-state hidden">
+      <div class="wait-emoji">⏳</div>
+      <div class="wait-text">Warten auf das nächste Spiel …</div>
+    </div>
+    <!-- Spiel-spezifische Bildschirm-Oberflaeche (aus der GAMES-Registry) -->
+    <div id="screen-game" class="game-mount"></div>
+    <!-- Schnellumfrage-Ergebnis (Fun-Pannel), klein oben links – s. renderScreenPoll in fun.js -->
+    <div id="screen-poll" class="poll-widget hidden"></div>
+    <!-- Killswitch-Anzeige (generisch, ueber allen Spielen) – Inhalt (Hintergrund/Text)
+         vom Master im Tab „⏸ Pause" konfigurierbar, s. pause.js renderPauseVisual() -->
+    <div id="screen-locked" class="pause-overlay hidden">
+      <div class="pause-bg"></div>
+      <div class="pause-content">
+        <div class="pause-icon">⏸</div>
+        <div class="pause-text"></div>
+      </div>
+    </div>
+    <!-- QR-Code zum Mitspielen (generisch, ueber allen Spielen; vom Master gesteuert) -->
+    <div id="screen-qr" class="qr-card hidden">
+      <div id="qr-card-title" class="qr-card-title">📱 Zum Mitspielen scannen</div>
+      <div id="qr-code" class="qr-code"></div>
+      <div id="qr-url" class="qr-url"></div>
+    </div>
+    <!-- Scoreboard-Overlay (generisch, ueber allen Spielen) – Modus vom Master gesteuert -->
+    <div id="screen-scoreboard" class="scoreboard-overlay hidden">
+      <div class="sb-head"><span class="sb-cup">🏆</span> <span id="sb-head-label">Punktestand</span></div>
+      <div id="sb-list" class="sb-list"></div>
+      <div id="sb-podium" class="sb-podium hidden"></div>
+    </div>
+    <!-- Session-Endscreen (Zusammenfassung am Ende eines Spielplans) – nur Bildschirm -->
+    <div id="screen-sessionend" class="sessionend-overlay hidden">
+      <div class="se-head"><span class="se-cup">🎉</span> Session-Zusammenfassung</div>
+      <div id="se-podium" class="sb-podium"></div>
+      <div id="se-facts" class="se-facts"></div>
+    </div>
+    <!-- Fun-Countdown (generisch, ueber allen Spielen; vom Master im Tab „🎉 Fun" gesteuert, s. fun.js) -->
+    <div id="screen-countdown" class="countdown-overlay hidden">
+      <div class="cd-ring">
+        <svg viewBox="0 0 200 200" aria-hidden="true">
+          <circle class="cd-track" cx="100" cy="100" r="90"></circle>
+          <circle id="cd-arc" class="cd-arc" cx="100" cy="100" r="90" pathLength="1000"></circle>
+        </svg>
+        <div id="cd-num" class="cd-num">10</div>
+      </div>
+      <div id="cd-label" class="cd-label"></div>
+    </div>
+    <!-- Gluecksrad (Fun-Pannel, generisch, ueber allen Spielen) – s. wheel.js renderScreenWheel() -->
+    <div id="screen-wheel" class="wheel-overlay hidden">
+      <div class="wheel-box">
+        <div class="wheel-pointer"></div>
+        <div id="wheel-disc" class="wheel-disc"></div>
+        <div class="wheel-hub">🎡</div>
+      </div>
+      <div id="wheel-result" class="wheel-result hidden"></div>
+    </div>
+    <!-- Emoji-Reaktionen (generisch, ueber allen Spielen) – schwebende Emojis der Spieler -->
+    <div id="screen-reactions" class="reactions-layer"></div>
+    <!-- Hype-Meter/Hype-Train (Fun-Pannel): kleiner Balken, der sich mit den Reaktionen fuellt, s. fun.js -->
+    <div id="screen-hype" class="hype-meter hidden">
+      <div class="hype-label"><span class="hype-train">🚂</span> <span id="hype-text">HYPE</span></div>
+      <div class="hype-track"><div id="hype-fill" class="hype-fill"></div></div>
+    </div>
+    <!-- Fallback-Button fuer die globale Audio-Freischaltung (generisch, ueber allen Spielen) -->
+    <button id="screen-audio-activate" class="aq-activate hidden" type="button">🔊 Ton aktivieren</button>
+  </section>
+</main>
+
+<!-- ===================== MASTER ===================== -->
+<main id="view-master" class="view hidden">
+  <header class="topbar">
+    <span class="badge">🎛️ Master</span>
+    <span id="master-title" class="topbar-title">Quiz System</span>
+    <span id="self-status-master" class="self-dot small" title="Verbindung"><span class="led"></span></span>
+  </header>
+
+  <nav class="tabbar">
+    <button class="tab-btn active" data-tab="game">🎮 Controls</button>
+    <button class="tab-btn" data-tab="config">🎲 Spiele</button>
+    <button class="tab-btn" data-tab="design">🎨 Design</button>
+    <button class="tab-btn" data-tab="pause">⏸ Pause</button>
+    <button class="tab-btn" data-tab="fun">🎉 Fun</button>
+    <button class="tab-btn" data-tab="general">⚙️ Allgemein</button>
+  </nav>
+
+  <!-- TAB: Aktuelles Spiel -->
+  <div id="tab-game" class="tab-panel">
+    <!-- 1. Spieler sperren (Killswitch) -->
+    <section class="panel killswitch-panel">
+      <button id="ctrl-lock" class="btn lock-btn big">🔒 Spieler sperren</button>
+      <p id="lock-hint" class="muted small">Spieler können aktuell interagieren.</p>
+    </section>
+
+    <!-- 2. Aktives Spiel + Profil (nur sichtbar, wenn ein Spiel läuft) -->
+    <div id="active-game-info" class="active-game-info hidden">
+      <span id="agi-emoji" class="agi-emoji"></span>
+      <span id="agi-name" class="agi-name"></span>
+      <span id="agi-profile" class="agi-profile"></span>
+    </div>
+
+    <!-- 2. Game-Controls: Wartezustand, wenn kein Spiel aktiv ist -->
+    <div id="master-wait" class="wait-state hidden">
+      <div class="wait-emoji">⏸️</div>
+      <div class="wait-text">Kein Spiel aktiv – wähle im Tab „🎲 Spiele" ein Spiel aus.</div>
+    </div>
+
+    <!-- 2. Game-Controls: Spiel-spezifische Steuerung + Ergebnisse (aus der GAMES-Registry) -->
+    <div id="master-game" class="game-mount"></div>
+
+    <!-- 3. Geräte -->
+    <section class="panel">
+      <h3>Geräte</h3>
+      <div class="device-counts">
+        <span class="dev-count"><span class="dev-count-emoji">🖥️</span> Bildschirme <b id="count-screens">0</b></span>
+        <span class="dev-count"><span class="dev-count-emoji">🎛️</span> Master <b id="count-masters">0</b></span>
+      </div>
+      <div class="score-steprow">
+        <span class="muted small">Punkte-Schrittweite ±</span>
+        <input id="score-step" type="number" value="1" min="1" step="1" class="score-step-input" />
+      </div>
+      <div id="master-players" class="device-list"></div>
+      <!-- Nur-Master-Modus: lokale Teilnehmer ohne eigenes Geraet anlegen -->
+      <div id="local-player-add" class="local-player-add hidden">
+        <input id="local-player-name" type="text" maxlength="24" placeholder="Name (leer = automatisch)" />
+        <button id="local-player-add-btn" class="btn btn-ghost small" type="button">+ Lokalen Teilnehmer</button>
+      </div>
+      <div class="row-buttons">
+        <button id="ctrl-cleanup" class="btn btn-ghost small">Offline aufräumen</button>
+        <button id="ctrl-resetscores" class="btn btn-ghost small">Gesamtwertung zurücksetzen</button>
+      </div>
+    </section>
+
+    <!-- 4. Hintergrundmusik (generisch, Ton nur am Bildschirm; Playlist im Tab „⚙️ Allgemein") -->
+    <section class="panel music-panel" id="music-panel">
+      <div class="music-head">
+        <span class="music-title-label">🎵 Hintergrundmusik</span>
+        <span class="music-status muted small" id="music-status"></span>
+      </div>
+      <div class="music-now" id="music-now"></div>
+      <div class="music-btns">
+        <button id="music-prev" class="btn btn-ghost music-btn" type="button" title="Vorheriger Titel">⏮</button>
+        <button id="music-toggle" class="btn btn-primary music-btn music-play" type="button" title="Play/Pause">▶</button>
+        <button id="music-next" class="btn btn-ghost music-btn" type="button" title="Nächster Titel">⏭</button>
+        <button id="music-shuffle" class="btn btn-ghost music-btn music-opt" type="button" title="Zufallswiedergabe">🔀</button>
+        <button id="music-repeat" class="btn btn-ghost music-btn music-opt" type="button" title="Wiederholen">🔁</button>
+      </div>
+      <div class="aq-vol-row music-vol-row">
+        <span class="aq-vol-label">🔊</span>
+        <input class="aq-vol-slider" id="music-volume" type="range" min="0" max="100" step="1" value="50" />
+        <span class="aq-vol-val" id="music-volume-val">50 %</span>
+      </div>
+    </section>
+
+    <!-- 5. Spielplan-Steuerung (nur sichtbar, wenn ein Spielplan Schritte hat) -->
+    <section class="panel playlist-runbar hidden" id="playlist-runbar">
+      <div class="pl-run-head">
+        <span class="pl-run-title">🗒️ Spielplan</span>
+        <span class="pl-run-pos muted small" id="pl-run-pos"></span>
+      </div>
+      <div class="pl-carousel" id="pl-run-carousel">
+        <div class="pl-carousel-track" id="pl-run-track"></div>
+      </div>
+      <div class="pl-run-btns">
+        <button id="pl-prev" class="btn btn-ghost">◀ Zurück</button>
+        <button id="pl-next" class="btn btn-primary">Nächstes ▶</button>
+      </div>
+    </section>
+
+    <!-- 5. Wertung (Team-Modus, generisch, spielunabhängig) -->
+    <section class="panel teams-panel">
+      <div class="sb-toggle-row">
+        <span class="sb-toggle-label">👥 Wertung</span>
+        <div id="team-toggle" class="seg">
+          <button class="seg-btn" data-team="off">Einzel</button>
+          <button class="seg-btn" data-team="on">Teams</button>
+        </div>
+      </div>
+      <div id="teams-manager" class="teams-manager hidden">
+        <div id="teams-list" class="teams-list"></div>
+        <button id="team-add" class="btn btn-ghost small">＋ Team hinzufügen</button>
+        <p class="muted small">Im Team-Modus zählt die <b>Summe</b> aller Spieler-Punkte eines Teams. Spieler ordnest du unten in der Geräteliste einem Team zu.</p>
+      </div>
+    </section>
+
+    <!-- 6. Scoreboard am Bildschirm -->
+    <section class="panel scoreboard-panel">
+      <div class="sb-toggle-row">
+        <span class="sb-toggle-label">🏆 Scoreboard am Bildschirm</span>
+        <div id="sb-toggle" class="seg">
+          <button class="seg-btn" data-mode="off">Aus</button>
+          <button class="seg-btn" data-mode="side">Seitenleiste</button>
+          <button class="seg-btn" data-mode="full">Vollbild</button>
+          <button class="seg-btn" data-mode="podium">🏆 Podium</button>
+        </div>
+      </div>
+      <p class="muted small">„Podium" zeigt die Top 3 als Sieger-Abschluss. Bei „Vollbild"/„Podium" holt jede Spielsteuerung den Bildschirm automatisch zurück ins Spiel.</p>
+      <div class="slider-row" id="sb-scale-row"><label>Textgröße</label><input id="sb-scale" type="range" min="50" max="200" step="5" value="100" /><span class="sv" id="sb-scale-v">100 %</span></div>
+      <div class="slider-row" id="podium-speed-row"><label>Podium-Tempo (pro Platz)</label><input id="podium-speed" type="range" min="300" max="3000" step="100" value="900" /><span class="sv" id="podium-speed-v">0.9 s</span></div>
+      <button id="podium-replay-btn" class="btn btn-ghost small">🔁 Podium-Enthüllung wiederholen</button>
+      <button id="sessionend-replay-btn" class="btn btn-ghost small hidden">🎉 Session-Zusammenfassung erneut zeigen</button>
+    </section>
+
+    <!-- 7. QR-Code am Bildschirm (Beitritts-URL) – generisch, spielunabhängig -->
+    <section class="panel qr-panel">
+      <div class="sb-toggle-row">
+        <span class="sb-toggle-label">📱 QR-Code am Bildschirm</span>
+        <label class="switch">
+          <input type="checkbox" id="qr-switch" />
+          <span class="switch-track"><span class="switch-thumb"></span></span>
+        </label>
+      </div>
+      <p class="muted small">Zeigt die Beitritts-Adresse als QR-Code auf dem Bildschirm – Handys scannen und sind sofort als Spieler dabei, ohne etwas zu tippen.</p>
+      <label class="qr-url-row" for="qr-title-input">
+        <span class="muted small">Überschrift der QR-Karte (leer = Standardtext)</span>
+        <input type="text" id="qr-title-input" class="qr-url-input" maxlength="60" placeholder="📱 Zum Mitspielen scannen" />
+      </label>
+      <label class="qr-url-row" for="qr-url-input">
+        <span class="muted small">Eigene Adresse für den QR-Code (leer = automatisch erkannt)</span>
+        <input type="text" id="qr-url-input" class="qr-url-input" placeholder="z. B. https://mein-quiz.de/" />
+      </label>
+    </section>
+  </div>
+
+  <!-- TAB: Spiele (Auswahl von Spiel + Profil) -->
+  <div id="tab-config" class="tab-panel hidden">
+
+    <!-- Ansicht A: Spiel- & Profilauswahl -->
+    <div id="games-browse">
+      <!-- Spielplan (Playlist): Spiel+Profil-Schritte vorbereiten, im Spiel-Tab durchklicken -->
+      <section class="panel playlist-panel">
+        <h3>🗒️ Spielplan (Playlist)</h3>
+        <p class="muted small">Bereite eine Reihenfolge aus Spiel + Profil vor. Im Tab „🎮 Controls" klickst du dich mit „Nächstes" durch – ideal für einen ganzen Quizabend.</p>
+        <div id="pl-steps" class="pl-steps"></div>
+        <button id="pl-add" class="btn btn-ghost small">＋ Schritt hinzufügen</button>
+        <p id="pl-msg" class="muted small"></p>
+      </section>
+
+      <!-- Gesamt-Backup: alle Spiel-Profile + Titel/Design/Spielplan/Teams (kein Passwort) -->
+      <section class="panel backup-panel">
+        <details class="mini-menu">
+          <summary class="btn btn-ghost small">⋮ Gesamt-Backup (alle Spiele)</summary>
+          <div class="mini-menu-list">
+            <button id="backup-export" class="btn btn-ghost small" type="button">⬇️ Alles exportieren</button>
+            <label class="btn btn-ghost small mini-menu-file">⬆️ Datei importieren…
+              <input id="backup-import-file" type="file" accept="application/json,.json" hidden />
+            </label>
+          </div>
+        </details>
+        <p id="backup-msg" class="muted small"></p>
+      </section>
+
+      <section class="panel">
+        <h3>Spiel &amp; Profil wählen</h3>
+        <p class="muted small">Wähle das aktive Spiel und dessen Profil. Für Detail-Einstellungen „⚙️ Konfigurieren".</p>
+        <label class="game-sort-bar">
+          <span class="muted small">Reihenfolge</span>
+          <select id="game-sort">
+            <option value="custom">Eigene Reihenfolge (ziehen)</option>
+            <option value="recent">Zuletzt gespielt oben</option>
+            <option value="alphaAsc">Alphabetisch (A→Z)</option>
+            <option value="alphaDesc">Alphabetisch (Z→A)</option>
+          </select>
+          <span id="game-sort-hint" class="muted small hidden">Karten am ⠿ ziehen zum Umsortieren</span>
+        </label>
+        <div id="game-list" class="game-list"></div>
+      </section>
+    </div>
+
+    <!-- Ansicht B: Konfig-Seite (nur über „Konfigurieren" erreichbar) -->
+    <div id="config-page" class="hidden">
+      <section class="panel config-back-panel">
+        <button id="config-back" class="btn btn-ghost small">← Zurück zur Spielauswahl</button>
+      </section>
+
+      <section class="panel" id="game-config-panel">
+        <h3><span id="config-game-emoji"></span> <span id="config-game-name">Konfiguration</span></h3>
+
+        <details class="mini-menu">
+          <summary class="btn btn-ghost small">⋮ Import/Export</summary>
+          <div class="mini-menu-list">
+            <button id="cfg-export-all" class="btn btn-ghost small" type="button">⬇️ Alle Profile exportieren</button>
+            <button id="cfg-export-one" class="btn btn-ghost small" type="button">⬇️ Aktuelles Profil exportieren</button>
+            <label class="btn btn-ghost small mini-menu-file">⬆️ Datei importieren…
+              <input id="cfg-import-file" type="file" accept="application/json,.json" hidden />
+            </label>
+          </div>
+        </details>
+
+        <div class="profile-bar">
+          <button id="profile-new" class="btn btn-ghost small" type="button">➕ Neues Profil</button>
+          <label>Profil
+            <select id="profile-select"></select>
+          </label>
+          <button id="profile-activate" class="btn btn-ghost small">Als aktiv setzen</button>
+          <button id="profile-delete" class="btn btn-ghost small danger-text">Löschen</button>
+        </div>
+
+        <div id="config-fields" class="config-fields"></div>
+
+        <div class="profile-save-row">
+          <input id="profile-name" type="text" maxlength="40" placeholder="Profilname (neu oder überschreiben)" />
+          <button id="profile-save" class="btn btn-primary">Profil speichern</button>
+        </div>
+        <p id="config-msg" class="muted small"></p>
+      </section>
+    </div>
+  </div>
+
+  <!-- TAB: Design (Themes / Farben / Form / Hintergrund / Bildschirm-Extras) -->
+  <div id="tab-design" class="tab-panel hidden">
+    <section class="panel">
+      <h3>🎨 Design</h3>
+      <div class="design-body">
+
+        <!-- Grund-Design (Vorlage) -->
+        <div class="design-section">
+          <h4>Grund-Design</h4>
+          <div class="design-grid">
+            <label>Design-Vorlage
+              <select id="dz-theme"></select>
+            </label>
+          </div>
+          <p class="design-hint">„Eigenes (Custom)" schaltet die Farb-, Form- &amp; Schrift-Regler frei. Hintergrund-Stil und Bildschirm-Effekte wirken auf jeder Vorlage.</p>
+        </div>
+
+        <!-- Farben (nur custom) -->
+        <div class="design-section" id="dz-colors-sec">
+          <h4>Farben</h4>
+          <div id="dz-colors" class="color-grid"></div>
+        </div>
+
+        <!-- Form & Typografie (nur custom) -->
+        <div class="design-section" id="dz-form-sec">
+          <h4>Form &amp; Typografie</h4>
+          <div class="slider-row"><label>Ecken-Radius</label><input id="dz-radius" type="range" min="0" max="40" step="1" /><span class="sv" id="dz-radius-v"></span></div>
+          <div class="slider-row"><label>Glow-Stärke</label><input id="dz-glow" type="range" min="0" max="80" step="1" /><span class="sv" id="dz-glow-v"></span></div>
+          <div class="design-grid">
+            <label>Schriftart
+              <select id="dz-font"></select>
+            </label>
+          </div>
+        </div>
+
+        <!-- Hintergrund-Stil (global, jede Vorlage) -->
+        <div class="design-section">
+          <h4>Hintergrund-Stil</h4>
+          <div class="design-grid">
+            <label>Stil
+              <select id="dz-bgstyle"></select>
+            </label>
+          </div>
+          <div class="slider-row" id="dz-angle-row"><label>Verlaufs-Winkel</label><input id="dz-angle" type="range" min="0" max="360" step="1" /><span class="sv" id="dz-angle-v"></span></div>
+        </div>
+
+        <!-- Bildschirm-Extras (nur Beamer) -->
+        <div class="design-section">
+          <h4>Bildschirm (Beamer)</h4>
+          <div class="design-grid">
+            <label>Titel-Stil
+              <select id="dz-titlestyle"></select>
+            </label>
+            <label>Bewegter Effekt
+              <select id="dz-effect"></select>
+            </label>
+            <label class="chk" style="flex-direction:row; align-items:center; gap:.5rem;">
+              <input type="checkbox" id="dz-vignette" /> Vignette (dunkle Ecken)
+            </label>
+          </div>
+          <div class="slider-row" id="dz-speed-row"><label>Effekt-Tempo</label><input id="dz-speed" type="range" min="25" max="300" step="5" /><span class="sv" id="dz-speed-v"></span></div>
+
+          <h4 style="margin-top:1rem;">Hintergrundbild</h4>
+          <div class="bg-manager">
+            <input type="file" id="dz-bg-file" accept="image/*" />
+            <span class="design-hint" id="dz-bg-msg">Bilder werden in <code>public/backgrounds/</code> abgelegt.</span>
+          </div>
+          <div id="dz-bg-thumbs" class="bg-thumbs"></div>
+          <div class="slider-row"><label>Bild-Abdunklung</label><input id="dz-dim" type="range" min="0" max="90" step="1" /><span class="sv" id="dz-dim-v"></span></div>
+          <div class="slider-row"><label>Bild-Unschärfe</label><input id="dz-blur" type="range" min="0" max="20" step="1" /><span class="sv" id="dz-blur-v"></span></div>
+        </div>
+
+        <!-- Live-Vorschau des Beamer-Hintergrunds -->
+        <div class="design-section">
+          <h4>Vorschau (Beamer-Hintergrund)</h4>
+          <div id="dz-preview" class="design-preview"><div class="dp-title">Beamer-Vorschau</div></div>
+        </div>
+
+        <button id="design-save" class="btn btn-primary">Speichern &amp; an alle senden</button>
+        <p id="design-save-msg" class="muted small"></p>
+      </div>
+    </section>
+  </div>
+
+  <!-- TAB: Pause-Bildschirm (Killswitch-Anzeige am Beamer) -->
+  <div id="tab-pause" class="tab-panel hidden">
+    <section class="panel">
+      <h3>⏸ Pause-Bildschirm</h3>
+      <p class="design-hint">Wird am Bildschirm gezeigt, sobald du im Tab „🎮 Controls" die Spieler sperrst (🔒). Die Sperre selbst bleibt unveraendert – hier stellst du nur ein, wie der Bildschirm dabei aussieht.</p>
+      <div class="design-body">
+
+        <div class="design-section">
+          <h4>Text &amp; Symbol</h4>
+          <div class="design-grid">
+            <label>Überschrift
+              <input id="pz-text" type="text" maxlength="60" placeholder="Pause" />
+            </label>
+            <label>Symbol
+              <select id="pz-icon"></select>
+            </label>
+          </div>
+        </div>
+
+        <div class="design-section">
+          <h4>Hintergrund</h4>
+          <div class="design-grid">
+            <label>Art
+              <select id="pz-bgtype"></select>
+            </label>
+          </div>
+          <p class="design-hint">„Design-Hintergrund" übernimmt das aktuelle Aussehen (Tab 🎨 Design).</p>
+
+          <div class="design-grid" id="pz-color-row">
+            <label>Farbe
+              <input id="pz-color" type="color" />
+            </label>
+          </div>
+
+          <div id="pz-images-sec">
+            <h4 style="margin-top:1rem;">Bilder (Diashow bei mehreren)</h4>
+            <div class="bg-manager">
+              <input type="file" id="pz-img-file" accept="image/*" />
+              <span class="design-hint" id="pz-img-msg">Bilder werden in <code>public/pause/</code> abgelegt.</span>
+            </div>
+            <div id="pz-img-thumbs" class="bg-thumbs"></div>
+            <div class="slider-row"><label>Abdunklung</label><input id="pz-dim" type="range" min="0" max="90" step="1" /><span class="sv" id="pz-dim-v"></span></div>
+            <div class="slider-row"><label>Unschärfe</label><input id="pz-blur" type="range" min="0" max="20" step="1" /><span class="sv" id="pz-blur-v"></span></div>
+            <div class="slider-row" id="pz-interval-row"><label>Bildwechsel alle</label><input id="pz-interval" type="range" min="3" max="60" step="1" /><span class="sv" id="pz-interval-v"></span></div>
+          </div>
+        </div>
+
+        <div class="design-section">
+          <h4>Vorschau</h4>
+          <div id="pz-preview" class="design-preview"><div class="pause-bg"></div><div class="pause-content"><div class="pause-icon">⏸</div><div class="pause-text"></div></div></div>
+        </div>
+
+        <button id="pause-save" class="btn btn-primary">Speichern &amp; an alle senden</button>
+        <p id="pause-save-msg" class="muted small"></p>
+      </div>
+    </section>
+  </div>
+
+  <!-- TAB: Fun-Pannel (kleine Show-Effekte fuer Bildschirm+Spieler, wird noch wachsen) -->
+  <div id="tab-fun" class="tab-panel hidden">
+    <section class="panel">
+      <h3>🎉 Fun</h3>
+      <p class="design-hint">Kleine Spielereien fuer zwischendurch – wirken auf Bildschirm und Spieler-Handys (nicht auf dieses Master-Geraet). Hier kommen mit der Zeit weitere Effekte dazu.</p>
+      <div class="design-body">
+        <!-- Kurze Show-Effekte nebeneinander (umbrechend auf schmalen Geraeten) -->
+        <div class="fun-row">
+          <div class="design-section">
+            <h4>💥 Flashbang</h4>
+            <p class="design-hint">Blitzt Bildschirm und Spieler-Handys 1 Sekunde lang hell weiss auf und blendet dann ueber 0,5 Sekunden wieder aus.</p>
+            <button id="fun-flashbang-btn" class="btn btn-warn big">💥 Flashbang</button>
+          </div>
+          <div class="design-section">
+            <h4>🙃 Kopfstand</h4>
+            <p class="design-hint">Stellt die Spieler-Handys 10 Sekunden lang auf den Kopf (180 Grad gedreht) und dreht sie danach wieder zurueck.</p>
+            <button id="fun-kopfstand-btn" class="btn btn-warn big">🙃 Kopfstand</button>
+          </div>
+          <div class="design-section">
+            <h4>🪩 Disco-Modus</h4>
+            <p class="design-hint">Laesst alle Farben auf Bildschirm und Spieler-Handys dauerhaft durch den Farbkreis rotieren (Hue-Rotate), bis du ihn wieder ausschaltest.</p>
+            <button id="fun-disco-btn" class="btn big">🪩 Disco an</button>
+          </div>
+        </div>
+
+        <!-- Spieler-Nachrichten: drei frei bearbeitbare Vorlagen (Bild + Text)
+             als Overlay auf den Spieler-Handys, an alle oder einzelne Spieler
+             (wie die Fake-Popups). S. fun.js renderFunMessages(). -->
+        <div class="design-section">
+          <h4>💬 Nachricht an Spieler</h4>
+          <p class="design-hint">Vorlage bearbeiten (wird automatisch gespeichert), auswaehlen und dann an alle oder einzelne Spieler senden. Auf das Bild tippen, um es zu wechseln. Weggeklickte Nachrichten werden in der Liste als ✅ angezeigt.</p>
+
+          <div id="msg-presets" class="msg-presets"></div>
+
+          <!-- Bildauswahl fuer die gerade bearbeitete Vorlage (msgPickFor) -->
+          <div id="msg-img-picker" class="msg-img-picker hidden">
+            <div class="bg-manager">
+              <input type="file" id="msg-img-file" accept="image/*" />
+              <span class="design-hint" id="msg-img-msg">Bilder liegen in <code>public/backgrounds/</code>.</span>
+              <button id="msg-img-close" class="btn btn-ghost small" type="button">Fertig</button>
+            </div>
+            <div id="msg-img-thumbs" class="bg-thumbs"></div>
+          </div>
+          <p id="msg-send-info" class="muted small"></p>
+          <div class="fun-popup-all">
+            <button id="msg-send-all" class="btn btn-primary" type="button">📢 An alle senden</button>
+            <button id="msg-clear-all" class="btn" type="button">✖ Alle schließen</button>
+          </div>
+          <div id="msg-list" class="fun-popup-list"></div>
+        </div>
+        <div class="design-section">
+          <div class="sb-toggle-row">
+            <span class="sb-toggle-label">🚂 Hype-Meter / Hype-Train</span>
+            <label class="switch">
+              <input type="checkbox" id="hype-switch" />
+              <span class="switch-track"><span class="switch-thumb"></span></span>
+            </label>
+          </div>
+          <p class="design-hint">Applausometer am Bildschirm: Schicken die Spieler viele Emoji-Reaktionen, erscheint oben ein kleiner Balken, der sich fuellt. Ist er voll, faehrt der Hype-Train eine Stufe hoeher. Ebbt die Stimmung ab, verschwindet er wieder. Braucht aktivierte Emoji-Reaktionen (Tab ⚙️ Allgemein).</p>
+          <div class="sb-toggle-row">
+            <span class="sb-toggle-label">Empfindlichkeit</span>
+            <div id="hype-sensitivity" class="seg">
+              <button class="seg-btn" data-level="low">Wenig (große Runde)</button>
+              <button class="seg-btn" data-level="mid">Mittel</button>
+              <button class="seg-btn" data-level="high">Hoch (kleine Runde)</button>
+            </div>
+          </div>
+          <p id="hype-reactions-off" class="muted small hidden">⚠️ Emoji-Reaktionen sind gerade ausgeschaltet – der Hype-Meter bekommt so keine Daten.</p>
+        </div>
+        <div class="design-section">
+          <h4>🃏 Sabotage-Karte</h4>
+          <p class="design-hint">Verflucht einen Spieler: Er kann keine Eingaben mehr machen und sein Handy wird verschwommen und grau, bis du den Fluch wieder aufhebst.</p>
+          <div id="fun-curse-list" class="curse-list"></div>
+          <button id="fun-uncurse-all" class="btn" type="button">✨ Alle Flüche aufheben</button>
+        </div>
+        <div class="design-section">
+          <h4>⏱️ Countdown</h4>
+          <p class="design-hint">Blendet am Bildschirm einen grossen Countdown ein. In den letzten Sekunden piept es, bei 0 ertoent ein Signal. Bleibt nach Ablauf stehen, bis du ihn ausblendest.</p>
+          <div class="cd-ctrl-row">
+            <label>Sekunden <input id="fun-cd-sek" type="number" min="1" max="5999" step="1" value="10" class="score-step-input" /></label>
+            <span class="cd-presets">
+              <button class="btn small" data-cd-sek="5" type="button">5</button>
+              <button class="btn small" data-cd-sek="10" type="button">10</button>
+              <button class="btn small" data-cd-sek="30" type="button">30</button>
+              <button class="btn small" data-cd-sek="60" type="button">60</button>
+            </span>
+          </div>
+          <div class="cd-ctrl-row">
+            <label>Piepen in den letzten <input id="fun-cd-warn" type="number" min="0" max="60" step="1" value="10" class="score-step-input" /> Sekunden <span class="muted small">(0 = stumm)</span></label>
+          </div>
+          <div class="cd-ctrl-row">
+            <button id="fun-cd-start" class="btn btn-primary big" type="button">▶ Start</button>
+            <button id="fun-cd-pause" class="btn" type="button" disabled>⏸ Pause</button>
+            <button id="fun-cd-stop" class="btn" type="button" disabled>✖ Ausblenden</button>
+          </div>
+          <p id="fun-cd-status" class="muted small">Kein Countdown aktiv.</p>
+        </div>
+        <!-- Soundboard: Antippen spielt den Sound NUR am Bildschirm (s. fun.js / lib/soundboard.js).
+             Mitgelieferte Sounds: public/sounds/soundboard/, eigene: public/soundboard/. -->
+        <div class="design-section">
+          <h4>🔊 Soundboard</h4>
+          <p class="design-hint">Antippen spielt den Sound am Bildschirm ab. Mehrere Sounds dürfen sich überlagern, ⏹ stoppt alle.</p>
+          <div class="sb-topbar">
+            <button id="sb-stop" class="btn btn-danger small" type="button">⏹ Alle stoppen</button>
+            <div class="aq-vol-row sb-vol-row">
+              <span>🔈</span>
+              <input class="aq-vol-slider" id="sb-volume" type="range" min="0" max="100" step="1" value="80" />
+              <span class="aq-vol-val" id="sb-volume-val">80 %</span>
+            </div>
+            <button id="sb-edit" class="btn btn-ghost small" type="button" title="Sounds ein-/ausblenden, eigene löschen">✎ Bearbeiten</button>
+          </div>
+          <div id="sb-presets" class="sb-grid"></div>
+          <h4 class="fun-subhead">⭐ Eigene Sounds</h4>
+          <div id="sb-own" class="sb-grid"></div>
+          <div class="row-buttons">
+            <button id="sb-upload-btn" class="btn btn-ghost small" type="button">⬆ Eigene Sounds hochladen</button>
+            <input id="sb-upload-file" type="file" accept="audio/*" multiple class="hidden" />
+            <span id="sb-upload-msg" class="muted small"></span>
+          </div>
+        </div>
+        <div class="design-section">
+          <h4>📊 Schnellumfrage</h4>
+          <p class="design-hint">Schickt eine Ja/Nein-Frage an alle Spieler-Handys. Das Ergebnis erscheint klein oben links am Bildschirm (live waehrend der Abstimmung, nach dem Beenden als Endergebnis).</p>
+          <label>Frage
+            <input id="fun-poll-question" type="text" maxlength="120" placeholder="Ja oder Nein?" />
+          </label>
+          <div class="fun-poll-btns">
+            <button id="fun-poll-start" class="btn btn-primary">📊 Umfrage starten</button>
+            <button id="fun-poll-close" class="btn">⏹ Beenden</button>
+            <button id="fun-poll-hide" class="btn btn-danger">✖ Ausblenden</button>
+          </div>
+          <p id="fun-poll-status" class="muted small">Keine Umfrage aktiv.</p>
+        </div>
+        <div class="design-section">
+          <h4>🎡 Glücksrad</h4>
+          <p class="design-hint">Blendet ein Glücksrad auf dem Bildschirm ein. Felder sind entweder ausgewählte Spieler oder freie Texte (eine Zeile = ein Feld). Der Server lost das Ergebnis aus, der Bildschirm dreht.</p>
+          <div id="wheel-mode" class="seg">
+            <button class="seg-btn" data-mode="players" type="button">👥 Spieler</button>
+            <button class="seg-btn" data-mode="text" type="button">✏️ Freitext</button>
+          </div>
+          <div id="wheel-players-box" class="msg-targets" style="margin-top:.8rem;">
+            <div class="row-buttons">
+              <button id="wheel-all-btn" class="btn btn-ghost small" type="button">Alle</button>
+              <button id="wheel-online-btn" class="btn btn-ghost small" type="button">Nur online</button>
+              <button id="wheel-none-btn" class="btn btn-ghost small" type="button">Keine</button>
+            </div>
+            <div id="wheel-players" class="msg-players"></div>
+          </div>
+          <div id="wheel-text-box" class="hidden" style="margin-top:.8rem;">
+            <textarea id="wheel-text" rows="6" placeholder="Ein Feld pro Zeile, z.B.&#10;Freigetränk&#10;Strafrunde&#10;Joker"></textarea>
+          </div>
+          <div class="slider-row" style="margin-top:.8rem;"><label>Drehdauer</label><input id="wheel-duration" type="range" min="2" max="15" step="1" value="6" /><span class="sv" id="wheel-duration-v"></span></div>
+          <div class="row-buttons" style="margin-top:.8rem;">
+            <button id="wheel-show-btn" class="btn btn-ghost" type="button">👁 Einblenden</button>
+            <button id="wheel-spin-btn" class="btn btn-primary" type="button">🎡 Drehen</button>
+            <button id="wheel-remove-btn" class="btn btn-ghost" type="button">🗑 Gewinner entfernen</button>
+          </div>
+          <p id="wheel-info" class="muted small"></p>
+        </div>
+        <div class="design-section">
+          <h4>🪟 Fake-Popups</h4>
+          <p class="design-hint">Schaltet einzelnen Spielern (oder allen) ein nerviges „echtes" Popup aufs Handy – Cookie-Banner, AGB, Captcha &amp; Co. Der Spieler muss es erst wegklicken, bevor er weiterspielen kann. Erst Popup-Art waehlen, dann senden.</p>
+          <div id="fun-popup-types" class="seg fun-popup-types"></div>
+          <div class="fun-popup-all">
+            <button id="fun-popup-all" class="btn btn-primary">📢 An alle senden</button>
+            <button id="fun-popup-clear" class="btn">✖ Alle schließen</button>
+          </div>
+          <div id="fun-popup-list" class="fun-popup-list"></div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- TAB: Allgemeine Einstellungen (Titel / Passwort) -->
+  <div id="tab-general" class="tab-panel hidden">
+    <section class="panel">
+      <h3>Allgemein</h3>
+      <div class="admin-body">
+        <label>Titel
+          <input id="set-title" type="text" maxlength="60" />
+        </label>
+        <p class="design-hint">🎨 Aussehen, Farben, Hintergrund &amp; Bildschirm-Effekte findest du im eigenen Tab <strong>Design</strong>.</p>
+        <label>Neues Admin-Passwort (optional)
+          <input id="set-newpass" type="text" placeholder="leer lassen = unverändert" />
+        </label>
+        <button id="admin-save" class="btn btn-primary">Speichern &amp; an alle senden</button>
+        <p id="admin-save-msg" class="muted small"></p>
+      </div>
+    </section>
+
+    <!-- Hintergrundmusik: Playlist (Dateien in public/music/) + Optionen. Gesteuert
+         wird im Tab „🎮 Controls", abgespielt nur am Bildschirm. -->
+    <section class="panel music-settings">
+      <h3>🎵 Hintergrundmusik</h3>
+      <p class="muted small">Die Musik läuft nur am Bildschirm. Play/Pause, Titelwechsel und Lautstärke steuerst du im Tab „🎮 Controls".</p>
+      <div id="music-tracks" class="pl-steps"></div>
+      <div class="row-buttons">
+        <button id="music-upload-btn" class="btn btn-ghost small" type="button">⬆ Musik hochladen</button>
+        <input id="music-upload-file" type="file" accept="audio/*" multiple class="hidden" />
+        <span id="music-upload-msg" class="muted small"></span>
+      </div>
+      <div id="music-extra-wrap" class="music-extra-wrap hidden">
+        <p class="muted small">Weitere Dateien im Musik-Ordner (nicht in der Playlist):</p>
+        <div id="music-extra" class="pl-steps"></div>
+      </div>
+      <div class="slider-row"><label>Ein-/Ausblenden bei Play/Pause</label><input id="music-fade" type="range" min="0" max="10" step="0.5" value="2" /><span class="sv" id="music-fade-v">2 s</span></div>
+      <p class="muted small">Musik automatisch pausieren, solange eines dieser Spiele aktiv ist:</p>
+      <div id="music-pausegames" class="music-pausegames"></div>
+    </section>
+
+    <!-- Nur-Master-Modus: kein Spieler-Handy noetig, Master steuert stellvertretend -->
+    <section class="panel">
+      <div class="sb-toggle-row">
+        <span class="sb-toggle-label">🖥️ Nur-Master-Modus</span>
+        <label class="switch">
+          <input type="checkbox" id="master-only-switch" />
+          <span class="switch-track"><span class="switch-thumb"></span></span>
+        </label>
+      </div>
+      <p class="muted small">Ohne Spieler-Handys spielen: im Tab „🎮 Controls" erscheinen zusaetzliche Stellvertreter-Steuerungen, und im Geraete-Menue kannst du lokale Teilnehmer ohne eigenes Geraet anlegen. Echte Spieler koennen trotzdem jederzeit dazustossen.</p>
+    </section>
+
+    <!-- Emoji-Reaktionen: Spieler koennen jederzeit ein Emoji abschicken, das am Bildschirm aufschwebt -->
+    <section class="panel">
+      <div class="sb-toggle-row">
+        <span class="sb-toggle-label">😀 Emoji-Reaktionen</span>
+        <label class="switch">
+          <input type="checkbox" id="reactions-switch" />
+          <span class="switch-track"><span class="switch-thumb"></span></span>
+        </label>
+      </div>
+      <div class="sb-toggle-row">
+        <span class="sb-toggle-label">Begrenzung</span>
+        <div id="reactions-limit" class="seg">
+          <button class="seg-btn" data-limit="none">Keine Begrenzung</button>
+          <button class="seg-btn" data-limit="5s">5 pro Sek.</button>
+          <button class="seg-btn" data-limit="1s">1 pro Sek.</button>
+          <button class="seg-btn" data-limit="10s">1 pro 10 Sek.</button>
+        </div>
+      </div>
+      <div class="aq-vol-row">
+        <span class="aq-vol-label">🔊 Lautstärke Sound</span>
+        <input class="aq-vol-slider" id="reactions-volume" type="range" min="0" max="100" step="1" value="50" />
+        <span class="aq-vol-val" id="reactions-volume-val">50 %</span>
+      </div>
+      <p class="muted small">Spieler koennen jederzeit ein Emoji abschicken, das am Bildschirm aufschwebt. Jede Reaktion kann auf Wunsch des Spielers zusaetzlich einen kurzen Sound am Bildschirm ausloesen.</p>
+    </section>
+    <!-- Session-Endscreen: welche Fun-Fact-Kacheln gezeigt werden + manueller Reset -->
+    <section class="panel">
+      <div class="sb-toggle-row">
+        <span class="sb-toggle-label">🎉 Session-Endscreen: Fun Facts</span>
+      </div>
+      <p class="muted small">Am Ende des Spielplans zeigt der Bildschirm eine Zusammenfassung. Waehle, welche Fun-Fact-Kacheln dabei erscheinen.</p>
+      <div id="sessionfacts-list" class="admin-body">
+        <label class="row"><input type="checkbox" id="sf-fastest" checked /> ⚡ Schnellste Reaktion/Buzz</label>
+        <label class="row"><input type="checkbox" id="sf-jump" checked /> 🚀 Größter Punktesprung</label>
+        <label class="row"><input type="checkbox" id="sf-closest" checked /> 🎯 Genaueste Schätzung</label>
+        <label class="row"><input type="checkbox" id="sf-correct" checked /> ✅ Meiste richtige Antworten</label>
+      </div>
+      <p class="muted small">Die Session-Statistik läuft über den ganzen Spielplan und wird nur hier manuell zurückgesetzt.</p>
+      <button id="session-reset-btn" class="btn btn-ghost small">🗑️ Session-Statistiken zurücksetzen</button>
+    </section>
+  </div>
+</main>
+
+<!-- ===================== SPIELER ===================== -->
+<main id="view-player" class="view hidden">
+  <!-- Team-Hintergrund (nur Team-Modus, dezent/matt) – per JS befuellt, s. renderPlayerTeamBadge -->
+  <div id="player-team-bg"></div>
+  <header class="topbar">
+    <!-- Avatar/Farbe (selbst waehlbar): dezenter Kreis-Button, klappt ein Emoji-
+         Raster + Farb-Swatches auf. Server ist autoritativ, siehe setAvatar/setColor. -->
+    <div id="player-avatar" class="avatar-picker">
+      <button id="avatar-toggle" class="avatar-btn" type="button" title="Avatar &amp; Farbe" aria-haspopup="true" aria-expanded="false">
+        <span id="avatar-emoji">🙂</span>
+      </button>
+      <div id="avatar-menu" class="avatar-menu hidden">
+        <div id="avatar-grid" class="avatar-grid"></div>
+        <div id="avatar-colors" class="avatar-colors"></div>
+      </div>
+    </div>
+    <input id="player-name" class="name-edit" maxlength="24" />
+    <span id="player-team" class="team-badge hidden"></span>
+    <span id="self-status-player" class="self-dot small" title="Verbindung"><span class="led"></span></span>
+  </header>
+  <section class="player-stage">
+    <!-- Neutraler Wartezustand, wenn kein Spiel aktiv ist -->
+    <div id="player-wait" class="wait-state hidden">
+      <div class="wait-emoji">⏳</div>
+      <div class="wait-text">Warten auf das nächste Spiel …</div>
+    </div>
+    <!-- Spiel-spezifische Spieler-Oberflaeche (aus der GAMES-Registry) -->
+    <div id="player-game" class="game-mount"></div>
+    <!-- Schnellumfrage (Fun-Pannel): Ja/Nein-Karte ueber dem Spiel – s. renderPlayerPoll in fun.js -->
+    <div id="player-poll" class="poll-card hidden">
+      <div id="player-poll-q" class="poll-card-q"></div>
+      <div class="poll-card-btns">
+        <button class="btn poll-vote poll-ja" data-vote="ja" type="button">👍 Ja</button>
+        <button class="btn poll-vote poll-nein" data-vote="nein" type="button">👎 Nein</button>
+      </div>
+      <div id="player-poll-hint" class="muted small"></div>
+    </div>
+    <!-- Killswitch-Anzeige (generisch, ueber allen Spielen) -->
+    <div id="player-locked" class="locked-banner hidden">🔒 Gesperrt</div>
+  </section>
+  <!-- Emoji-Reaktionen (generisch, ueber allen Spielen; Server kann sie global deaktivieren) -->
+  <div id="player-reactions" class="reactions-bar hidden">
+    <button id="reactions-toggle" class="reactions-toggle" type="button" title="Reaktionen ein-/ausklappen" aria-expanded="true">
+      <span class="reactions-toggle-icon">🙂</span>
+      <span class="reactions-toggle-label" id="reactions-toggle-label"></span>
+    </button>
+    <div id="reactions-buttons" class="reactions-buttons">
+      <button class="emoji-reaction-btn" data-emoji="👍" type="button">👍</button>
+      <button class="emoji-reaction-btn" data-emoji="❤️" type="button">❤️</button>
+      <button class="emoji-reaction-btn" data-emoji="😂" type="button">😂</button>
+      <button class="emoji-reaction-btn" data-emoji="😮" type="button">😮</button>
+      <button class="emoji-reaction-btn" data-emoji="🎉" type="button">🎉</button>
+      <button class="emoji-reaction-btn" data-emoji="👏" type="button">👏</button>
+      <button class="emoji-reaction-btn" data-emoji="🔥" type="button">🔥</button>
+      <button class="emoji-reaction-btn" data-emoji="😢" type="button">😢</button>
+    </div>
+    <button id="reactions-sound-toggle" class="reactions-sound-toggle" type="button" title="Sound bei Reaktionen ein/aus" aria-pressed="true">🔊</button>
+  </div>
+</main>
+
+<!-- Spieler-Nachricht (Fun-Tab „💬 Nachricht an Spieler"): Vollbild-Overlay ueber
+     allem auf dem Spieler-Handy, s. renderPlayerMessage in fun.js. -->
+<div id="player-message" class="player-message hidden"></div>
+
+<!-- Flashbang-Overlay: liegt ausserhalb der drei Rollen-Views, damit ein einziges
+     Element fuer Bildschirm+Spieler reicht (s. triggerFlashbang in fun.js). -->
+<div id="flashbang-overlay"></div>
+<!-- Fake-Popup (Fun-Tab), nur fuer Spieler: s. renderPlayerPopup in fun.js. -->
+<div id="fake-popup" class="hidden"></div>
+
+<!-- Sabotage-Karte: Hinweis fuer verfluchte Spieler. Liegt ausserhalb von
+     #view-player, damit er selbst NICHT mit verschwimmt (s. renderPlayerCurse in fun.js). -->
+<div id="player-cursed" class="cursed-banner hidden">🃏 Du wurdest verflucht!<small>Warte, bis der Master den Fluch aufhebt …</small></div>
+
+<!-- Client aufgeteilt (siehe public/js/). Reihenfolge ist wichtig:
+     KERN zuerst, dann die Spiel-Module, dann config/editors, dann registry.js
+     ZULETZT (die GAMES-Registry referenziert die create*-Funktionen der Spiele). -->
+<script src="/js/qr.js"></script>
+<script src="/js/core.js"></script>
+<script src="/js/game-reaction.js"></script>
+<script src="/js/game-wordlist.js"></script>
+<script src="/js/game-mc.js"></script>
+<script src="/js/game-zd.js"></script>
+<script src="/js/game-fw.js"></script>
+<script src="/js/game-tf.js"></script>
+<script src="/js/game-zu.js"></script>
+<script src="/js/game-dq.js"></script>
+<script src="/js/game-sq.js"></script>
+<script src="/js/game-aq.js"></script>
+<script src="/js/game-ro.js"></script>
+<script src="/js/game-zm.js"></script>
+<script src="/js/game-bild.js"></script>
+<script src="/js/config.js"></script>
+<script src="/js/editors.js"></script>
+<script src="/js/design.js"></script>
+<script src="/js/pause.js"></script>
+<script src="/js/fun.js"></script>
+<script src="/js/wheel.js"></script>
+<script src="/js/music.js"></script>
+<script src="/js/registry.js"></script>
+</body>
+</html>
