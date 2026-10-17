@@ -713,7 +713,8 @@ function renderCasesEditor(container) {
 // der Server mischt sie beim Anzeigen. Wie die anderen Struktur-Editoren ist
 // die DOM die Quelle der Wahrheit (syncRoqFromDom); mindestens 2 Elemente noetig.
 // ---------------------------------------------------------------------------
-function roqBlank() { return { frage: '', items: ['', ''] }; }
+// anker = Nr. (1-basiert) des Elements, das im Staffel-Modus vorab fest steht.
+function roqBlank() { return { frage: '', items: ['', ''], anker: 1 }; }
 
 function buildRoqEditor(container) {
   container.classList.add('roq-editor');
@@ -726,7 +727,8 @@ function setRoqData(container, arr) {
   const src = Array.isArray(arr) ? arr : [];
   container._roq = src.map((q) => ({
     frage: q && q.frage != null ? String(q.frage) : '',
-    items: Array.isArray(q.items) && q.items.length ? q.items.map((s) => String(s)) : ['', '']
+    items: Array.isArray(q.items) && q.items.length ? q.items.map((s) => String(s)) : ['', ''],
+    anker: Number.isInteger(q.anker) ? q.anker + 1 : 1
   }));
   if (container._roq.length === 0) container._roq = [roqBlank()];
   container._focus = null;
@@ -739,7 +741,8 @@ function syncRoqFromDom(container) {
   container.querySelectorAll('.roq-card').forEach((card) => {
     arr.push({
       frage: card.querySelector('.roq-frage').value,
-      items: card.querySelector('.roq-items').value.split('\n')
+      items: card.querySelector('.roq-items').value.split('\n'),
+      anker: parseInt(card.querySelector('.roq-anker').value, 10) || 1
     });
   });
   container._roq = arr;
@@ -749,10 +752,15 @@ function syncRoqFromDom(container) {
 function getRoqData(container) {
   syncRoqFromDom(container);
   return container._roq
-    .map((q) => ({
-      frage: String(q.frage).trim().slice(0, 200),
-      items: q.items.map((s) => String(s).trim()).filter(Boolean).slice(0, 20)
-    }))
+    .map((q) => {
+      const items = q.items.map((s) => String(s).trim()).filter(Boolean).slice(0, 20);
+      // Anker-Nr. bezieht sich auf die Eintraege OHNE Leerzeilen -> 0-basierter Index.
+      return {
+        frage: String(q.frage).trim().slice(0, 200),
+        items,
+        anker: Math.min(Math.max(q.anker - 1, 0), Math.max(items.length - 1, 0))
+      };
+    })
     .filter((q) => q.frage && q.items.length >= 2);
 }
 
@@ -805,6 +813,18 @@ function renderRoqEditor(container) {
     items.placeholder = 'Maus\nKatze\nHund\nPferd';
     items.value = q.items.join('\n');
     card.appendChild(items);
+
+    const ankerLabel = document.createElement('div');
+    ankerLabel.className = 'muted small roq-cap';
+    ankerLabel.textContent = 'Staffel-Modus: Nr. des Anker-Elements (steht vorab fest, 1 = erstes Element)';
+    card.appendChild(ankerLabel);
+    const anker = document.createElement('input');
+    anker.type = 'number';
+    anker.className = 'roq-anker';
+    anker.min = 1;
+    anker.max = 20;
+    anker.value = q.anker;
+    card.appendChild(anker);
 
     container.appendChild(card);
     if (focusIndex === qi) setTimeout(() => frage.focus(), 0);

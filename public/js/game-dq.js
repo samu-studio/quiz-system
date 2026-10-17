@@ -29,8 +29,7 @@ function createDqScreen(root, ctx) {
       '<div class="dq-solution" data-el="solution"></div>' +
       '<div class="dq-status" data-el="status"></div>' +
       '<div class="mc-final" data-el="final">' +
-        '<div class="mc-final-title">🏁 Endstand</div>' +
-        '<div class="leaderboard"></div>' +
+        '<div class="mc-final-title">🏁 Quiz beendet</div>' +
       '</div>' +
     '</div>';
   const introEl = root.querySelector('[data-el="intro"]');
@@ -69,7 +68,6 @@ function createDqScreen(root, ctx) {
       solutionEl.classList.add('hidden'); statusEl.classList.add('hidden');
       counterEl.textContent = dq.total + ' Fälle';
       finalEl.classList.remove('hidden');
-      renderLeaderboard(finalEl, s);
       return;
     }
     finalEl.classList.add('hidden');
@@ -147,7 +145,6 @@ function createDqPlayer(root, ctx) {
       '</form>' +
       '<button class="fw-buzzer dq-buzzer hidden" data-el="buzzer" type="button">BUZZ!</button>' +
       '<div class="mc-p-feedback dq-p-feedback" data-el="feedback"></div>' +
-      '<div class="mc-p-score" data-el="score"></div>' +
     '</div>';
   const counterEl = root.querySelector('[data-el="counter"]');
   const pointsEl = root.querySelector('[data-el="points"]');
@@ -156,7 +153,6 @@ function createDqPlayer(root, ctx) {
   const input = root.querySelector('[data-el="input"]');
   const buzzer = root.querySelector('[data-el="buzzer"]');
   const fbEl = root.querySelector('[data-el="feedback"]');
-  const scoreEl = root.querySelector('[data-el="score"]');
   let startTime = 0;      // lokaler Fallbeginn (performance.now) fuer Buzzer-Zeitmessung
   let qNum = -1;
 
@@ -200,8 +196,6 @@ function createDqPlayer(root, ctx) {
   function update(s) {
     const dq = s.game.dq;
     if (!dq) return;
-    const pts = s.game.scores[ctx.clientId()] || 0;
-    scoreEl.textContent = pts > 0 ? 'Deine Punkte: ' + pts : '';
     const buzzMode = !!dq.buzzerModus;
 
     // Fallwechsel -> lokalen Zeitstempel setzen
@@ -214,7 +208,7 @@ function createDqPlayer(root, ctx) {
       cluesEl.innerHTML = '';
       form.classList.add('hidden'); buzzer.classList.add('hidden');
       fbEl.className = 'mc-p-feedback dq-p-feedback';
-      if (dq.phase === 'done') fbEl.textContent = pts > 0 ? 'Du hast ' + pts + ' Punkte geholt.' : 'Geschafft!';
+      if (dq.phase === 'done') fbEl.textContent = 'Geschafft!';
       else fbEl.textContent = 'Warte auf den Start …';
       return;
     }
@@ -224,14 +218,13 @@ function createDqPlayer(root, ctx) {
     counterEl.textContent = 'Fall ' + dq.number + ' / ' + dq.total;
     renderClues(dq.hinweise);
 
-    // Punktwert (aktuell erreichbar bzw. bei Auflösung die Lösung)
+    // Bei Auflösung die Lösung (Punkte zeigt nur der Bildschirm)
     pointsEl.className = 'dq-p-points';
     if (reveal) {
       pointsEl.textContent = dq.loesung || '–';
       pointsEl.classList.add('solution');
     } else {
-      pointsEl.textContent = dq.pointsNow;
-      pointsEl.classList.toggle('low', dq.pointsNow <= dq.minPunkte);
+      pointsEl.textContent = '';
     }
 
     // Eingabe- bzw. Buzzer-Bereich je nach Modus
@@ -243,7 +236,7 @@ function createDqPlayer(root, ctx) {
       buzzer.className = 'fw-buzzer dq-buzzer';
       if (reveal) {
         buzzer.classList.add('idle'); buzzer.disabled = true; buzzer.textContent = 'BUZZ!';
-        if (dq.winner && dq.winner.id === ctx.clientId()) { buzzer.classList.remove('idle'); buzzer.classList.add('hit'); fbEl.textContent = '✓ Erwischt! +' + dq.winner.points; }
+        if (dq.winner && dq.winner.id === ctx.clientId()) { buzzer.classList.remove('idle'); buzzer.classList.add('hit'); fbEl.textContent = '✓ Erwischt!'; }
         else if (dq.winner && dq.winner.name) fbEl.textContent = '🏆 ' + (dq.winner.avatar ? dq.winner.avatar + ' ' : '') + dq.winner.name + ' hatte es!';
         else fbEl.textContent = 'Aufgelöst.';
       } else if (dq.buzz) {
@@ -258,7 +251,7 @@ function createDqPlayer(root, ctx) {
       const myGuess = s.game.dqMyGuess || null;
       if (reveal) {
         form.classList.add('hidden');
-        if (dq.winner && dq.winner.id === ctx.clientId()) fbEl.textContent = '✓ Richtig! +' + dq.winner.points;
+        if (dq.winner && dq.winner.id === ctx.clientId()) fbEl.textContent = '✓ Richtig!';
         else if (dq.winner && dq.winner.name) fbEl.textContent = '🏆 ' + (dq.winner.avatar ? dq.winner.avatar + ' ' : '') + dq.winner.name + ' war schneller.';
         else fbEl.textContent = 'Aufgelöst.';
       } else {
@@ -316,7 +309,7 @@ function createDqMaster(root, ctx) {
   const clueBtn = root.querySelector('[data-act="dqClue"]');
   const revealBtn = root.querySelector('[data-act="dqReveal"]');
   const nextBtn = root.querySelector('[data-act="dqNext"]');
-  const PHASE_LABEL = { lobby: '⚪ Bereit', running: '🔎 Fall läuft', reveal: '💡 Aufgelöst', done: '🏁 Endstand' };
+  const PHASE_LABEL = { lobby: '⚪ Bereit', running: '🔎 Fall läuft', reveal: '💡 Aufgelöst', done: '🏁 Beendet' };
 
   root.querySelectorAll('[data-act]').forEach((b) => {
     b.addEventListener('click', async () => {
@@ -339,7 +332,7 @@ function createDqMaster(root, ctx) {
       ? (totalC + ' Fälle') : (dq.number + '/' + dq.total);
 
     const isLast = dq.number >= dq.total;
-    nextBtn.textContent = (phase === 'reveal' && isLast) ? '🏁 Endstand' : '⏭ Nächster Fall';
+    nextBtn.textContent = (phase === 'reveal' && isLast) ? '🏁 Beenden' : '⏭ Nächster Fall';
 
     startBtn.disabled = !(phase === 'lobby') || totalC === 0;
     clueBtn.disabled = !(phase === 'running') || !!dq.buzz || (dq.revealed >= dq.hintCount);
@@ -357,7 +350,7 @@ function createDqMaster(root, ctx) {
         ? '🔔 ' + (dq.buzz.avatar ? dq.buzz.avatar + ' ' : '') + dq.buzz.name + ' hat gebuzzert – „Richtig" oder „Falsch" wählen.'
         : (buzzMode ? 'Spieler buzzern. Bei jedem Hinweis sinken die Punkte.' : 'Spieler tippen. „Richtig" bei einem Spieler beendet den Fall.');
     } else if (phase === 'reveal') {
-      hintEl.textContent = isLast ? 'Letzter Fall – „Endstand" zeigt die Gesamtwertung.' : '„Nächster Fall" geht weiter.';
+      hintEl.textContent = isLast ? 'Letzter Fall – „Beenden" schließt das Quiz ab.' : '„Nächster Fall" geht weiter.';
     } else {
       hintEl.textContent = 'Quiz beendet. „Zurücksetzen" für einen neuen Durchlauf.';
     }

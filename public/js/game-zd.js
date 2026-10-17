@@ -27,8 +27,7 @@ function createZdScreen(root, ctx) {
       '<div class="mc-answered" data-el="answered"></div>' +
       '<div class="mc-group-pick" data-el="grouppick"></div>' +
       '<div class="mc-final" data-el="final">' +
-        '<div class="mc-final-title">🏁 Endstand</div>' +
-        '<div class="leaderboard"></div>' +
+        '<div class="mc-final-title">🏁 Quiz beendet</div>' +
       '</div>' +
     '</div>';
   const introEl = root.querySelector('[data-el="intro"]');
@@ -69,7 +68,6 @@ function createZdScreen(root, ctx) {
       pointsEl.classList.add('hidden'); pcapEl.classList.add('hidden'); groupPickEl.classList.add('hidden');
       counterEl.textContent = zd.total + ' Fragen';
       finalEl.classList.remove('hidden');
-      renderLeaderboard(finalEl, s);
       return;
     }
     finalEl.classList.add('hidden');
@@ -150,48 +148,27 @@ function createZdPlayer(root, ctx) {
   root.innerHTML =
     '<div class="mc-player zd-player">' +
       '<div class="mc-p-counter" data-el="counter"></div>' +
-      '<div class="zd-p-points" data-el="points"></div>' +
       '<div class="mc-p-question" data-el="question"></div>' +
       '<div class="mc-p-answers" data-el="answers"></div>' +
       '<div class="mc-p-feedback" data-el="feedback"></div>' +
-      '<div class="mc-p-score" data-el="score"></div>' +
     '</div>';
   const counterEl = root.querySelector('[data-el="counter"]');
-  const pointsEl = root.querySelector('[data-el="points"]');
   const qEl = root.querySelector('[data-el="question"]');
   const ansEl = root.querySelector('[data-el="answers"]');
   const fbEl = root.querySelector('[data-el="feedback"]');
-  const scoreEl = root.querySelector('[data-el="score"]');
   const LETTERS = ['A', 'B', 'C', 'D', 'E', 'F'];
-  let lastState = null;
   let qKey = null;        // aktuelle Frage-Kennung fuer Timer-Reset
   let startTime = 0;      // lokaler Fragenstart (performance.now)
-  let raf = 0;
-
-  function tick() {
-    raf = 0;
-    const s = lastState; if (!s) return;
-    const zd = s.game.zd; if (!zd || zd.phase !== 'question') return;
-    if (s.game.zdMyAnswer != null) return;   // schon geantwortet -> eingefroren
-    const val = zdLivePoints(zd, performance.now() - startTime);
-    pointsEl.textContent = val;
-    pointsEl.classList.toggle('low', val <= zd.minPoints);
-    raf = requestAnimationFrame(tick);
-  }
 
   function update(s) {
-    lastState = s;
     const zd = s.game.zd;
     if (!zd) return;
     const myAnswer = s.game.zdMyAnswer || null;
-    const pts = s.game.scores[ctx.clientId()] || 0;
-    scoreEl.textContent = pts > 0 ? 'Deine Punkte: ' + pts : '';
 
     // Lobby / Endstand -> keine Buttons
     if (zd.phase === 'lobby') {
       qKey = null;
       counterEl.textContent = '';
-      pointsEl.textContent = ''; pointsEl.className = 'zd-p-points';
       qEl.textContent = 'Warte auf den Start …';
       ansEl.innerHTML = ''; fbEl.textContent = ''; fbEl.className = 'mc-p-feedback';
       return;
@@ -199,11 +176,10 @@ function createZdPlayer(root, ctx) {
     if (zd.phase === 'done') {
       qKey = null;
       counterEl.textContent = 'Quiz beendet';
-      pointsEl.textContent = ''; pointsEl.className = 'zd-p-points';
       qEl.textContent = '🏁 Geschafft!';
       ansEl.innerHTML = '';
       fbEl.className = 'mc-p-feedback';
-      fbEl.textContent = pts > 0 ? 'Du hast ' + pts + ' Punkte geholt.' : '';
+      fbEl.textContent = '';
       return;
     }
 
@@ -215,16 +191,6 @@ function createZdPlayer(root, ctx) {
 
     const reveal = zd.phase === 'reveal';
     const locked = !!s.game.locked;
-
-    // Punkteanzeige: eingefroren (nach Antwort) oder live (waehrend Frage)
-    pointsEl.className = 'zd-p-points';
-    if (myAnswer) {
-      pointsEl.textContent = myAnswer.points;
-      pointsEl.classList.add('locked');
-    } else if (reveal) {
-      pointsEl.textContent = '–';
-    }
-    // (der Live-Wert wird sonst von tick() gesetzt)
 
     // Antwort-Buttons
     ansEl.innerHTML = '';
@@ -257,19 +223,16 @@ function createZdPlayer(root, ctx) {
     fbEl.className = 'mc-p-feedback';
     if (reveal) {
       if (!myAnswer) { fbEl.textContent = 'Keine Antwort'; fbEl.classList.add('miss'); }
-      else if (myAnswer.option === zd.correct) { fbEl.textContent = '✓ Richtig! +' + myAnswer.points; fbEl.classList.add('good'); }
+      else if (myAnswer.option === zd.correct) { fbEl.textContent = '✓ Richtig!'; fbEl.classList.add('good'); }
       else { fbEl.textContent = '✗ Leider falsch'; fbEl.classList.add('false'); }
     } else if (myAnswer) {
-      fbEl.textContent = '🔒 Gesichert: ' + myAnswer.points + ' Punkte';
+      fbEl.textContent = '🔒 Antwort gesichert';
     } else {
-      fbEl.textContent = 'Schnell wählen – der Zähler läuft!';
+      fbEl.textContent = 'Schnell wählen – je schneller, desto mehr Punkte!';
     }
-
-    // Live-Countdown starten (nur Fragephase, noch nicht geantwortet)
-    if (zd.phase === 'question' && !myAnswer && !raf) raf = requestAnimationFrame(tick);
   }
 
-  return { update, destroy() { if (raf) cancelAnimationFrame(raf); } };
+  return { update };
 }
 
 // --- Master: Ablaufsteuerung + aktuelle Frage (mit Loesung) + Antwortstatus --
@@ -307,7 +270,7 @@ function createZdMaster(root, ctx) {
   const revealBtn = root.querySelector('[data-act="zdReveal"]');
   const nextBtn = root.querySelector('[data-act="zdNext"]');
   const LETTERS = ['A', 'B', 'C', 'D', 'E', 'F'];
-  const PHASE_LABEL = { lobby: '⚪ Bereit', question: '❓ Frage läuft', reveal: '💡 Aufgelöst', done: '🏁 Endstand' };
+  const PHASE_LABEL = { lobby: '⚪ Bereit', question: '❓ Frage läuft', reveal: '💡 Aufgelöst', done: '🏁 Beendet' };
   let qKey = null;        // aktuelle Frage-Kennung fuer Timer-Reset (Nur-Master-Klick)
   let startTime = 0;      // lokaler Fragenstart (performance.now), fuer elapsedMs beim Klick
 
@@ -344,7 +307,7 @@ function createZdMaster(root, ctx) {
     } else if (phase === 'question') {
       hintEl.textContent = 'Spieler antworten – je schneller, desto mehr Punkte. „Auflösen" vergibt sie.';
     } else if (phase === 'reveal') {
-      hintEl.textContent = zd.number >= zd.total ? 'Letzte Frage – „Weiter" zeigt den Endstand.' : '„Weiter" für die nächste Frage.';
+      hintEl.textContent = zd.number >= zd.total ? 'Letzte Frage – „Weiter" beendet das Quiz.' : '„Weiter" für die nächste Frage.';
     } else {
       hintEl.textContent = 'Quiz beendet. „Zurücksetzen" für einen neuen Durchlauf.';
     }

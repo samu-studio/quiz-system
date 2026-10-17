@@ -43,6 +43,22 @@ const SKIP_FILES = new Set(['.DS_Store', 'Thumbs.db', 'desktop.ini']);
 const isPlainObj = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 const clone = (v) => JSON.parse(JSON.stringify(v));
 
+// Haelt ein anderes Programm die Datei fest (Nextcloud/Dropbox-Sync, Virenscanner,
+// exFAT/NTFS), scheitert Kopieren/Umbenennen mit EPERM/EBUSY/EACCES: kurz warten,
+// erneut versuchen. Wie saveConfig() im Server, nur synchron (CLI).
+const RETRY_CODES = new Set(['EPERM', 'EBUSY', 'EACCES']);
+const RETRY_MS = [100, 250, 500, 1000, 2000];
+const sleep = (ms) => { try { Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms); } catch (e) { /* egal */ } };
+function withRetry(fn) {
+  for (let i = 0; ; i++) {
+    try { return fn(); }
+    catch (e) {
+      if (RETRY_CODES.has(e.code) && i < RETRY_MS.length) { sleep(RETRY_MS[i]); continue; }
+      throw e;
+    }
+  }
+}
+
 function fail(msg) {
   console.error('\n[FEHLER] ' + msg + '\n');
   process.exit(1);
@@ -88,7 +104,7 @@ function copyFiles(plan) {
       const from = path.join(d.src, rel);
       const to = path.join(d.dst, rel);
       fs.mkdirSync(path.dirname(to), { recursive: true });
-      fs.copyFileSync(from, to);
+      withRetry(() => fs.copyFileSync(from, to));
       // Ausfuehr-Bit (Node-Binaries) mitnehmen, falls das Dateisystem es kennt
       try { fs.chmodSync(to, fs.statSync(from).mode); } catch (e) { /* egal */ }
       n++;
@@ -170,12 +186,18 @@ function writeConfig(cfg) {
   if (fs.existsSync(NEW_CONFIG)) {
     const stamp = new Date().toISOString().replace(/[:.]/g, '-');
     const backup = NEW_CONFIG + '.vor-import-' + stamp;
-    fs.copyFileSync(NEW_CONFIG, backup);
+    withRetry(() => fs.copyFileSync(NEW_CONFIG, backup));
     console.log('  Bisherige config.json gesichert als: ' + path.basename(backup));
   }
   const tmp = NEW_CONFIG + '.tmp';
-  fs.writeFileSync(tmp, JSON.stringify(cfg, null, 2));
-  fs.renameSync(tmp, NEW_CONFIG);
+  const json = JSON.stringify(cfg, null, 2);
+  try {
+    withRetry(() => fs.writeFileSync(tmp, json));
+    withRetry(() => fs.renameSync(tmp, NEW_CONFIG));
+  } catch (e) {
+    try { fs.unlinkSync(tmp); } catch (e2) { /* egal */ }
+    withRetry(() => fs.writeFileSync(NEW_CONFIG, json));   // nicht atomar, aber besser als gar nicht
+  }
 }
 
 // ---------- Hilfen ----------
@@ -274,7 +296,17 @@ async function main() {
   if (merged) {
     const port = (readJson(NEW_CONFIG) || {}).port || 8080;
     if (await serverRunning(port)) {
-      fail('Auf Port ' + port + ' laeuft gerade ein Quiz-Server. Bitte erst beenden (STRG+C im Server-Fenster), dann erneut starten.');
+      const bar = '='.repeat(64);
+      console.error('\n' + bar);
+      console.error('  ABBRUCH: Auf Port ' + port + ' laeuft bereits ein Quiz-Server.');
+      console.error(bar);
+      console.error('  Solange er laeuft, wird NICHTS kopiert.');
+      console.error('  -> Das Server-Fenster schliessen (STRG+C), dann erneut starten.');
+      console.error('');
+      console.error('  Hinweis: Es zaehlt jeder Server auf Port ' + port + ' – auch ein');
+      console.error('  anderer Quiz-Ordner mit demselben Port. Alle beenden.');
+      console.error(bar + '\n');
+      process.exit(1);
     }
   }
 

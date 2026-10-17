@@ -137,11 +137,15 @@ const GAMES = {
       { key: 'titel', label: 'Titel (auf dem Bildschirm)', type: 'text', maxlength: 80, placeholder: 'z. B. Personen → Erfindungen' },
       { key: 'linksLabel', label: 'Überschrift linke Spalte', type: 'text', maxlength: 40, placeholder: 'z. B. Person' },
       { key: 'rechtsLabel', label: 'Überschrift rechte Spalte', type: 'text', maxlength: 40, placeholder: 'z. B. Erfindung' },
-      { key: 'punkte', label: 'Punkte pro richtiger Zuordnung', type: 'number', min: 1, max: 100000, step: 10 },
+      { key: 'modus', label: 'Modus', type: 'select', options: [
+        { value: 'normal', label: 'Normal (alle ordnen gleichzeitig zu)' },
+        { value: 'staffel', label: 'Staffel (Teams/Spieler reihum, je Zug ein Kärtchen – Ablenker und „keine Verbindung" entfallen)' }
+      ] },
+      { key: 'punkte', label: 'Punkte pro richtiger Zuordnung (Staffel: pro richtigem Zug, im Team geteilt)', type: 'number', min: 1, max: 100000, step: 10 },
       { key: 'mischen', label: 'Rechte Kärtchen mischen', type: 'bool' },
       { key: 'paare', label: 'Zuordnungen', type: 'pairs' }
     ],
-    defaults: { titel: '', linksLabel: '', rechtsLabel: '', punkte: 100, mischen: true, paare: [] },
+    defaults: { titel: '', linksLabel: '', rechtsLabel: '', modus: 'normal', punkte: 100, mischen: true, paare: [] },
     player: createZuPlayer,
     screen: createZuScreen,
     master: createZuMaster
@@ -216,15 +220,19 @@ const GAMES = {
     desc: 'Kärtchen per Drag & Drop in die richtige Reihenfolge bringen.',
     fields: [
       { key: 'intro', label: 'Titel (auf dem Bildschirm)', type: 'text', maxlength: 80, placeholder: 'z. B. Reihenfolge-Quiz' },
+      { key: 'modus', label: 'Modus', type: 'select', options: [
+        { value: 'normal', label: 'Normal (alle sortieren gleichzeitig)' },
+        { value: 'staffel', label: 'Staffel (Teams/Spieler reihum, je Zug ein Wort; ein Anker-Wort steht vorab fest)' }
+      ] },
       { key: 'punkteModus', label: 'Punkte-Modus', type: 'select', options: [
         { value: 'alles', label: 'Alles oder nichts (nur bei 100% richtiger Reihenfolge)' },
         { value: 'paare', label: 'Teilpunkte (nach Anzahl richtiger Paare)' }
-      ] },
-      { key: 'punkte', label: 'Punkte pro Frage (bei perfekter Reihenfolge)', type: 'number', min: 1, max: 100000, step: 10 },
+      ], showIf: { key: 'modus', value: 'normal' } },
+      { key: 'punkte', label: 'Punkte pro Frage (bei perfekter Reihenfolge; Staffel: pro richtigem Zug, im Team geteilt)', type: 'number', min: 1, max: 100000, step: 10 },
       { key: 'shuffleQuestions', label: 'Fragen-Reihenfolge mischen', type: 'bool' },
       { key: 'fragen', label: 'Fragen', type: 'roq' }
     ],
-    defaults: { intro: '', punkteModus: 'alles', punkte: 100, shuffleQuestions: false, fragen: [] },
+    defaults: { intro: '', modus: 'normal', punkteModus: 'alles', punkte: 100, shuffleQuestions: false, fragen: [] },
     player: createRoPlayer,
     screen: createRoScreen,
     master: createRoMaster

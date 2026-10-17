@@ -8,17 +8,6 @@
 // zeit: wie Zeitdruck mit der Zeit fallend).
 // ===========================================================================
 
-// Punktwert lokal berechnen (fuer den Live-Zaehler im Zeit-Modus). Muss zur
-// Server-Formel (tfPointsFor) passen; die Zeit misst jedes Geraet selbst (Fairness).
-function tfLivePoints(tf, elapsedMs) {
-  if (tf.punkteModus !== 'zeit') return tf.punkte;
-  let p = tf.startPunkte - tf.abzugProSek * (Math.max(0, elapsedMs) / 1000);
-  p = Math.round(p);
-  if (p < tf.minPunkte) p = tf.minPunkte;
-  if (p > tf.startPunkte) p = tf.startPunkte;
-  return p;
-}
-
 // --- Bildschirm: Aussage + Verdict (Buzzer) bzw. Verteilung (Abstimmung) -----
 function createTfScreen(root, ctx) {
   root.innerHTML =
@@ -31,8 +20,7 @@ function createTfScreen(root, ctx) {
       '<div class="tf-dist" data-el="dist"></div>' +
       '<div class="tf-status" data-el="status"></div>' +
       '<div class="mc-final" data-el="final">' +
-        '<div class="mc-final-title">🏁 Endstand</div>' +
-        '<div class="leaderboard"></div>' +
+        '<div class="mc-final-title">🏁 Quiz beendet</div>' +
       '</div>' +
     '</div>';
   const counterEl = root.querySelector('[data-el="counter"]');
@@ -52,7 +40,6 @@ function createTfScreen(root, ctx) {
       stageEl.classList.add('hidden'); distEl.classList.add('hidden'); statusEl.classList.add('hidden');
       counterEl.textContent = tf.total + ' Aussagen';
       finalEl.classList.remove('hidden');
-      renderLeaderboard(finalEl, s);
       return;
     }
     finalEl.classList.add('hidden');
@@ -126,37 +113,21 @@ function createTfPlayer(root, ctx) {
   root.innerHTML =
     '<div class="tf-player">' +
       '<div class="tf-p-counter" data-el="counter"></div>' +
-      '<div class="tf-p-points" data-el="points"></div>' +
       '<div class="tf-p-statement" data-el="statement"></div>' +
       '<div class="tf-p-choices">' +
         '<button class="tf-choice wahr" data-el="wahr">✅ Wahr</button>' +
         '<button class="tf-choice falsch" data-el="falsch">❌ Falsch</button>' +
       '</div>' +
       '<div class="mc-p-feedback" data-el="feedback"></div>' +
-      '<div class="mc-p-score" data-el="score"></div>' +
     '</div>';
   const counterEl = root.querySelector('[data-el="counter"]');
-  const pointsEl = root.querySelector('[data-el="points"]');
   const stEl = root.querySelector('[data-el="statement"]');
   const wahrBtn = root.querySelector('[data-el="wahr"]');
   const falschBtn = root.querySelector('[data-el="falsch"]');
   const fbEl = root.querySelector('[data-el="feedback"]');
-  const scoreEl = root.querySelector('[data-el="score"]');
   let lastState = null;
   let qKey = null;        // aktuelle Aussagen-Kennung (Nummer) fuer Timer-Reset
   let startTime = 0;      // lokaler Aussagen-Beginn (performance.now)
-  let raf = 0;
-
-  function tick() {
-    raf = 0;
-    const s = lastState; if (!s) return;
-    const tf = s.game.tf; if (!tf || tf.phase !== 'running') return;
-    if (s.game.tfMyAnswer != null) return;   // schon geantwortet -> eingefroren
-    const val = tfLivePoints(tf, performance.now() - startTime);
-    pointsEl.textContent = val;
-    pointsEl.classList.toggle('low', val <= tf.minPunkte);
-    raf = requestAnimationFrame(tick);
-  }
 
   function send(answer) {
     const s = lastState;
@@ -173,13 +144,10 @@ function createTfPlayer(root, ctx) {
     const tf = s.game.tf;
     if (!tf) return;
     const myAnswer = s.game.tfMyAnswer || null;
-    const pts = s.game.scores[ctx.clientId()] || 0;
-    scoreEl.textContent = pts > 0 ? 'Deine Punkte: ' + pts : '';
 
     if (tf.phase === 'lobby') {
       qKey = null;
       counterEl.textContent = '';
-      pointsEl.textContent = ''; pointsEl.className = 'tf-p-points';
       stEl.textContent = 'Warte auf den Start …';
       wahrBtn.disabled = true; falschBtn.disabled = true;
       wahrBtn.className = 'tf-choice wahr'; falschBtn.className = 'tf-choice falsch';
@@ -189,11 +157,10 @@ function createTfPlayer(root, ctx) {
     if (tf.phase === 'done') {
       qKey = null;
       counterEl.textContent = 'Runde beendet';
-      pointsEl.textContent = ''; pointsEl.className = 'tf-p-points';
       stEl.textContent = '🏁 Geschafft!';
       wahrBtn.disabled = true; falschBtn.disabled = true;
       fbEl.className = 'mc-p-feedback';
-      fbEl.textContent = pts > 0 ? 'Du hast ' + pts + ' Punkte geholt.' : '';
+      fbEl.textContent = '';
       return;
     }
 
@@ -205,15 +172,6 @@ function createTfPlayer(root, ctx) {
 
     const revealed = tf.phase === 'paused';
     const locked = !!s.game.locked;
-
-    // Punkteanzeige: eingefroren (nach Antwort) oder live (waehrend Aussage laeuft)
-    pointsEl.className = 'tf-p-points';
-    if (myAnswer) {
-      pointsEl.classList.add('locked');
-      pointsEl.textContent = myAnswer.points != null ? myAnswer.points : '🔒';
-    } else if (revealed) {
-      pointsEl.textContent = '–';
-    }
 
     wahrBtn.className = 'tf-choice wahr'; falschBtn.className = 'tf-choice falsch';
     const chosenWahr = myAnswer && myAnswer.answer === true;
@@ -233,19 +191,16 @@ function createTfPlayer(root, ctx) {
     fbEl.className = 'mc-p-feedback';
     if (revealed) {
       if (!myAnswer) { fbEl.textContent = 'Keine Antwort'; fbEl.classList.add('miss'); }
-      else if (myAnswer.correct) { fbEl.textContent = '✓ Richtig! +' + myAnswer.points; fbEl.classList.add('good'); }
+      else if (myAnswer.correct) { fbEl.textContent = '✓ Richtig!'; fbEl.classList.add('good'); }
       else { fbEl.textContent = '✗ Leider falsch'; fbEl.classList.add('false'); }
     } else if (myAnswer) {
       fbEl.textContent = '🔒 Antwort gespeichert';
     } else {
       fbEl.textContent = 'Wahr oder falsch?';
     }
-
-    // Live-Countdown starten (nur solange die Aussage laeuft, noch nicht geantwortet)
-    if (tf.phase === 'running' && !myAnswer && !raf) raf = requestAnimationFrame(tick);
   }
 
-  return { update, destroy() { if (raf) cancelAnimationFrame(raf); } };
+  return { update };
 }
 
 // --- Master: Ablaufsteuerung + aktuelle Aussage (mit Loesung) + Antwortstatus
@@ -293,7 +248,7 @@ function createTfMaster(root, ctx) {
   const startBtn = root.querySelector('[data-act="tfStart"]');
   const revealBtn = root.querySelector('[data-act="tfReveal"]');
   const nextBtn = root.querySelector('[data-act="tfNext"]');
-  const PHASE_LABEL = { lobby: '⚪ Bereit', running: '▶ Läuft', paused: '⏸ Pausiert', done: '🏁 Endstand' };
+  const PHASE_LABEL = { lobby: '⚪ Bereit', running: '▶ Läuft', paused: '⏸ Pausiert', done: '🏁 Beendet' };
   let qSeq = -1;
   let startTime = 0;
 
@@ -333,7 +288,7 @@ function createTfMaster(root, ctx) {
         ? 'Wer zuerst antwortet, entscheidet die Runde sofort.'
         : 'Spieler stimmen ab. „Auflösen" vergibt die Punkte.';
     } else if (phase === 'paused') {
-      hintEl.textContent = tf.number >= tf.total ? 'Letzte Aussage – „Weiter" zeigt den Endstand.' : '„Weiter" für die nächste Aussage.';
+      hintEl.textContent = tf.number >= tf.total ? 'Letzte Aussage – „Weiter" beendet das Quiz.' : '„Weiter" für die nächste Aussage.';
     } else {
       hintEl.textContent = 'Runde beendet. „Zurücksetzen" für einen neuen Durchlauf.';
     }

@@ -17,8 +17,7 @@ function createFwScreen(root, ctx) {
       '<div class="fw-bar" data-el="bar"><span></span></div>' +
       '<div class="fw-status" data-el="status"></div>' +
       '<div class="mc-final" data-el="final">' +
-        '<div class="mc-final-title">🏁 Endstand</div>' +
-        '<div class="leaderboard"></div>' +
+        '<div class="mc-final-title">🏁 Quiz beendet</div>' +
       '</div>' +
     '</div>';
   const catEl = root.querySelector('[data-el="cat"]');
@@ -50,7 +49,6 @@ function createFwScreen(root, ctx) {
       lastSeq = -1;
       stageEl.classList.add('hidden'); barEl.classList.add('hidden'); statusEl.classList.add('hidden');
       finalEl.classList.remove('hidden');
-      renderLeaderboard(finalEl, s);
       return;
     }
     finalEl.classList.add('hidden');
@@ -116,12 +114,9 @@ function createFwPlayer(root, ctx) {
   btn.textContent = 'BUZZ!';
   const fb = document.createElement('div');
   fb.className = 'fw-p-feedback';
-  const score = document.createElement('div');
-  score.className = 'mc-p-score';
   root.className = 'game-mount';
   root.appendChild(btn);
   root.appendChild(fb);
-  root.appendChild(score);
 
   let startTime = 0;    // lokaler Wort-Beginn (performance.now) für die Zeitmessung
   let qSeq = -1;
@@ -144,8 +139,6 @@ function createFwPlayer(root, ctx) {
   function update(s) {
     const fw = s.game.fw;
     if (!fw) return;
-    const pts = s.game.scores[ctx.clientId()] || 0;
-    score.textContent = pts > 0 ? 'Deine Punkte: ' + pts : '';
 
     // Neues laufendes Wort? -> lokalen Zeitstempel setzen
     if (fw.phase === 'running' && fw.wordSeq !== qSeq) { qSeq = fw.wordSeq; startTime = performance.now(); }
@@ -159,14 +152,14 @@ function createFwPlayer(root, ctx) {
       fb.textContent = 'Warte auf den Start …';
     } else if (fw.phase === 'done') {
       btn.classList.add('idle'); btn.disabled = true; btn.textContent = '🏁';
-      fb.textContent = pts > 0 ? 'Du hast ' + pts + ' Punkte geholt.' : 'Geschafft!';
+      fb.textContent = 'Geschafft!';
     } else if (fw.phase === 'running') {
       btn.classList.add('go'); btn.disabled = false; btn.textContent = 'BUZZ!';
       fb.textContent = 'Buzzern, wenn das Wort NICHT passt!';
     } else { // paused
       btn.classList.add('idle'); btn.disabled = true; btn.textContent = 'BUZZ!';
       if (fw.verdict && iBuzzed) {
-        if (fw.verdict.wrong) { btn.classList.add('hit'); fb.textContent = '✅ Erwischt! +' + fw.verdict.awarded; fb.classList.add('good'); }
+        if (fw.verdict.wrong) { btn.classList.add('hit'); fb.textContent = '✅ Erwischt!'; fb.classList.add('good'); }
         else { fb.textContent = '❌ Fehlbuzz – das Wort passt.'; fb.classList.add('false'); }
       } else if (fw.verdict) {
         fb.textContent = '🔔 ' + (fw.verdict.buzzerAvatar ? fw.verdict.buzzerAvatar + ' ' : '') + fw.verdict.buzzerName + ' hat gebuzzert';
@@ -212,7 +205,7 @@ function createFwMaster(root, ctx) {
   const startBtn = root.querySelector('[data-act="fwStart"]');
   const pauseBtn = root.querySelector('[data-act="fwPause"]');
   const resumeBtn = root.querySelector('[data-act="fwResume"]');
-  const PHASE_LABEL = { lobby: '⚪ Bereit', running: '▶ Läuft', paused: '⏸ Pausiert', done: '🏁 Endstand' };
+  const PHASE_LABEL = { lobby: '⚪ Bereit', running: '▶ Läuft', paused: '⏸ Pausiert', done: '🏁 Beendet' };
   let qSeq = -1;
   let startTime = 0;
 

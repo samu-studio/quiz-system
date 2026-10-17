@@ -36,17 +36,20 @@ function zuFillBoard(els, opts) {
     slot.appendChild(label);
     slot.appendChild(zone);
 
-    // Auflösung: richtig/falsch je Slot markieren.
+    // Auflösung: richtig/falsch je Slot markieren; die Lösung nur bei falschen Slots
+    // nennen (bei richtigen liegt genau dieses Kärtchen schon drin).
     if (phase === 'reveal' && solution) {
       const correctRid = solution[l.id] || null;
       const placedRid = (placement && placement[l.id]) || null;
       const ok = placedRid === correctRid;
       slot.classList.add(ok ? 'correct' : 'wrong');
-      const tag = document.createElement('div');
-      tag.className = 'zu-soltag';
-      const correctText = correctRid ? (rights.find((r) => r.id === correctRid) || {}).text : '— keine Verbindung';
-      tag.textContent = '→ ' + (correctText || '?');
-      slot.appendChild(tag);
+      if (!ok) {
+        const tag = document.createElement('div');
+        tag.className = 'zu-soltag';
+        const correctText = correctRid ? (rights.find((r) => r.id === correctRid) || {}).text : '— keine Verbindung';
+        tag.textContent = '→ ' + (correctText || '?');
+        slot.appendChild(tag);
+      }
     }
     leftsEl.appendChild(slot);
   });
@@ -68,6 +71,11 @@ function zuFillBoard(els, opts) {
   }
 }
 
+// Staffel-Modus: gesetzte Paare + Entwurf des aktiven Teams als leftId -> rightId.
+function zuStaffelPlacement(st) {
+  return Object.assign({}, st.board, st.draft ? { [st.draft.leftId]: st.draft.rightId } : {});
+}
+
 // --- Spieler: Board mit Drag & Drop (Pointer Events -> Touch + Maus) ----------
 function createZuPlayer(root, ctx) {
   root.className = 'game-mount';
@@ -75,6 +83,7 @@ function createZuPlayer(root, ctx) {
     '<div class="zu-player">' +
       '<div class="zu-p-title" data-el="title"></div>' +
       '<div class="zu-p-hint" data-el="hint"></div>' +
+      '<div class="st-banner hidden" data-el="stbanner"></div>' +
       '<div class="zu-board" data-el="board">' +
         '<div class="zu-lefts" data-el="lefts"></div>' +
         '<div class="zu-pool" data-el="pool" data-drop="pool">' +
@@ -82,8 +91,8 @@ function createZuPlayer(root, ctx) {
           '<div class="zu-pool-cards" data-el="poolcards"></div>' +
         '</div>' +
       '</div>' +
+      '<button class="btn btn-primary big hidden" data-el="stsubmit">📤 Abschicken</button>' +
       '<div class="zu-p-feedback" data-el="feedback"></div>' +
-      '<div class="zu-p-score" data-el="score"></div>' +
     '</div>';
   const titleEl = root.querySelector('[data-el="title"]');
   const hintEl = root.querySelector('[data-el="hint"]');
@@ -93,18 +102,42 @@ function createZuPlayer(root, ctx) {
   const poolCapEl = root.querySelector('[data-el="poolcap"]');
   const poolCardsEl = root.querySelector('[data-el="poolcards"]');
   const feedbackEl = root.querySelector('[data-el="feedback"]');
-  const scoreEl = root.querySelector('[data-el="score"]');
+  const stBannerEl = root.querySelector('[data-el="stbanner"]');
+  const stSubmitEl = root.querySelector('[data-el="stsubmit"]');
 
   let placement = {};      // leftId -> rightId (lokale Quelle der Wahrheit)
   let lefts = [];          // [{id,text}]
   let rights = [];         // [{id,text}] in Anzeigereihenfolge
   let builtFor = '';       // Signatur, fuer die das Board zuletzt gebaut wurde
   let drag = null;         // laufender Drag-Zustand
+  // Staffel-Modus (s. lib/staffel.js): gesetzte Paare (stBoard) sind gesperrt, das aktive
+  // Team legt gemeinsam EIN neues Paar als Entwurf; stCanDrag = darf gerade ziehen.
+  let stMode = false, stBoard = {}, stCanDrag = false;
+  stSubmitEl.addEventListener('click', () => ctx.send({ type: 'staffelSubmit' }));
 
   // Board (Slots + Pool + Karten) fuer die aktuelle Phase neu aufbauen.
   function buildBoard(phase, solution, distractors, locked) {
-    const draggable = phase === 'matching' && !locked;
+    const draggable = phase === 'matching' && !locked && (!stMode || stCanDrag);
     zuFillBoard({ leftsEl, poolCardsEl, poolCapEl }, { lefts, rights, placement, phase, solution, distractors, draggable });
+    if (stMode) {
+      const fixed = new Set(Object.values(stBoard));
+      leftsEl.querySelectorAll('.zu-card').forEach((c) => {
+        if (!fixed.has(c.dataset.right)) return;
+        c.classList.add('locked');
+        c.classList.remove('draggable');
+      });
+    }
+  }
+
+  // Staffel: es gibt nur EINEN Entwurf – andere nicht gesperrte Karten zurueck in den Pool.
+  function stKeepSingleDraft(keepLeft) {
+    Object.keys(placement).forEach((lid) => {
+      if (lid === keepLeft || stBoard[lid]) return;
+      const zone = leftsEl.querySelector('.zu-dropzone[data-left="' + lid + '"]');
+      const c = zone && zone.querySelector('.zu-card');
+      if (c) poolCardsEl.appendChild(c);
+      delete placement[lid];
+    });
   }
 
   // --- Drag & Drop via Pointer Events ---------------------------------------
@@ -126,6 +159,7 @@ function createZuPlayer(root, ctx) {
     const s = ctx.state();
     if (!s || s.game.locked) return;
     if (!s.game.zu || s.game.zu.phase !== 'matching') return;
+    if (stMode && !stCanDrag) return;
     e.preventDefault();
 
     const rect = card.getBoundingClientRect();
@@ -177,6 +211,7 @@ function createZuPlayer(root, ctx) {
 
     if (t.dataset.drop === 'slot') {
       const targetLeft = t.dataset.left;
+      if (stMode && stBoard[targetLeft]) return;       // Staffel: Slot ist schon (richtig) belegt
       if (placement[targetLeft] === rightId) return;   // schon dort
       // evtl. dort liegende Karte verdrängen (zurück in den Pool)
       const displaced = placement[targetLeft] || null;
@@ -189,6 +224,7 @@ function createZuPlayer(root, ctx) {
         if (dcard) poolCardsEl.appendChild(dcard);
       }
       zone.appendChild(card);
+      if (stMode) stKeepSingleDraft(targetLeft);
       refreshZoneStates();
       ctx.send({ type: 'assign', leftId: targetLeft, rightId });
     } else {
@@ -217,13 +253,14 @@ function createZuPlayer(root, ctx) {
     if (!zu) return;
     titleEl.textContent = zu.titel || '';
     titleEl.classList.toggle('hidden', !zu.titel);
-    const pts = s.game.scores[ctx.clientId()] || 0;
-    scoreEl.textContent = pts > 0 ? 'Deine Punkte: ' + pts : '';
 
     // Lobby / kein Board -> Wartezustand
     if (zu.phase !== 'matching' && zu.phase !== 'reveal') {
       builtFor = '';
+      stMode = false;
       boardEl.classList.add('hidden');
+      stBannerEl.classList.add('hidden');
+      stSubmitEl.classList.add('hidden');
       hintEl.textContent = 'Warte auf den Start …';
       feedbackEl.textContent = '';
       feedbackEl.className = 'zu-p-feedback';
@@ -234,14 +271,38 @@ function createZuPlayer(root, ctx) {
     rights = zu.rights || [];
 
     const locked = !!s.game.locked;
-    const sig = zu.phase + '|' + lefts.map((l) => l.id).join(',') + '|' + rights.map((r) => r.id).join(',') + '|' + (locked ? 'L' : 'U');
+    // Staffel-Modus: nur die aktive Einheit sieht das Brett; gesetzte Paare + Entwurf kommen vom Server.
+    const st = zu.staffel || null;
+    const reveal = zu.phase === 'reveal';
+    stMode = !!st;
+    stBoard = st ? st.board : {};
+    const isActive = !!s.game.staffelMyTurn;
+    stCanDrag = !!st && !reveal && isActive && st.status === 'working' && !locked;
+    stBannerEl.classList.toggle('hidden', !st);
+    poolEl.classList.toggle('hidden', !!st && reveal);   // Staffel: es bleibt nichts uebrig (keine Ablenker)
+    stSubmitEl.classList.toggle('hidden', !stCanDrag);
+    if (st) {
+      stSubmitEl.disabled = !st.draft;
+      stBannerEl.innerHTML = reveal ? '🏁 Alle Paare sind gesetzt!' : staffelBannerHtml(st, stCanDrag);
+      boardEl.classList.toggle('hidden', !(reveal || isActive));
+    }
+    const sig = zu.phase + '|' + lefts.map((l) => l.id).join(',') + '|' + rights.map((r) => r.id).join(',') + '|' + (locked ? 'L' : 'U') +
+      (st ? '|S' + JSON.stringify([st.board, st.draft, st.status]) + (stCanDrag ? 1 : 0) : '');
 
-    if (builtFor !== sig) {
+    if (builtFor !== sig && !drag) {
       // Beim (Neu-)Aufbau die lokale Zuordnung aus der Server-Antwort übernehmen.
-      placement = Object.assign({}, s.game.zuMyAnswer || {});
+      placement = st
+        ? Object.assign({}, st.board, st.draft ? { [st.draft.leftId]: st.draft.rightId } : {})
+        : Object.assign({}, s.game.zuMyAnswer || {});
       buildBoard(zu.phase, zu.solution, zu.distractors, locked);
       refreshZoneStates();
       builtFor = sig;
+    }
+    if (st) {
+      hintEl.textContent = '';
+      feedbackEl.className = 'zu-p-feedback';
+      feedbackEl.textContent = '';
+      return;
     }
 
     // Hinweise + Feedback
@@ -260,7 +321,7 @@ function createZuPlayer(root, ctx) {
       });
       hintEl.textContent = 'Auflösung – deine Treffer sind grün markiert.';
       feedbackEl.className = 'zu-p-feedback ' + (correct === lefts.length ? 'good' : 'false');
-      feedbackEl.textContent = correct + ' von ' + lefts.length + ' richtig  ·  +' + (correct * (zu.punkte || 0));
+      feedbackEl.textContent = correct + ' von ' + lefts.length + ' richtig';
     }
   }
 
@@ -285,8 +346,7 @@ function createZuScreen(root, ctx) {
       '<div class="zu-s-status" data-el="status"></div>' +
       '<div class="zu-s-live" data-el="live"></div>' +
       '<div class="mc-final" data-el="final">' +
-        '<div class="mc-final-title">🏁 Endstand</div>' +
-        '<div class="leaderboard"></div>' +
+        '<div class="mc-final-title">🏁 Quiz beendet</div>' +
       '</div>' +
     '</div>';
   const titleEl = root.querySelector('[data-el="title"]');
@@ -307,8 +367,9 @@ function createZuScreen(root, ctx) {
 
     if (zu.phase !== 'matching' && zu.phase !== 'reveal') {
       colsEl.classList.add('hidden'); finalEl.classList.add('hidden');
+      liveEl.classList.add('hidden'); liveEl.innerHTML = '';
       statusEl.classList.remove('hidden');
-      statusEl.textContent = zu.total ? ('Gleich geht’s los … (' + zu.total + ' Zuordnungen)') : 'Keine Zuordnungen im Profil';
+      statusEl.textContent = zu.total ? ('Gleich geht’s los … (' + zu.pairs + ' Zuordnung' + (zu.pairs === 1 ? '' : 'en') + ')') : 'Keine Zuordnungen im Profil';
       return;
     }
 
@@ -316,12 +377,20 @@ function createZuScreen(root, ctx) {
     const lefts = zu.lefts || [];
     const rights = zu.rights || [];
     const reveal = zu.phase === 'reveal';
-    const masterOnly = !!(s.settings && s.settings.masterOnlyMode);
+    const masterOnly = !!(s.settings && s.settings.masterOnlyMode) && !zu.staffel;
+    // Staffel-Modus: wie der Nur-Master-Modus zeigt der Bildschirm das Live-Board
+    // (gesetzte Paare + Entwurf des aktiven Teams) statt der Referenzliste.
+    const staffelLive = !!zu.staffel && !reveal;
     // Nur-Master-Modus vor der Aufloesung: statt der reinen Referenzliste zeigt der
     // Bildschirm das Live-Board (s.u.) – identischer Inhalt, aber als Drag&Drop-
     // Board wie beim Spieler, daher bleibt die Liste hier ausgeblendet.
-    colsEl.classList.toggle('hidden', masterOnly && !reveal);
-    lheadEl.textContent = zu.linksLabel || '';
+    colsEl.classList.toggle('hidden', (masterOnly || staffelLive) && !reveal);
+    // Aufloesung: Paare + Ablenker zusammen in EINER Liste (links), die Kaertchen-
+    // Spalte entfaellt – sonst stuende jedes Kaertchen doppelt da.
+    colsEl.classList.toggle('merged', reveal);
+    lheadEl.textContent = reveal
+      ? [zu.linksLabel, zu.rechtsLabel].filter(Boolean).join(' → ')
+      : (zu.linksLabel || '');
     rheadEl.textContent = zu.rechtsLabel || '';
 
     // Rechte Kärtchen: Buchstaben-Index (zum Vorlesen/Diskutieren im Raum).
@@ -340,42 +409,42 @@ function createZuScreen(root, ctx) {
         row.innerHTML = '<span class="zu-s-text">' + escapeHtml(l.text) + '</span>' +
           '<span class="zu-s-arrow">→</span>' +
           '<span class="zu-s-ans">' + (rid ? (letterOf[rid] + ' · ' + escapeHtml((rights.find((r) => r.id === rid) || {}).text || '')) : 'keine Verbindung') + '</span>' +
-          '<span class="zu-s-cnt" title="richtig zugeordnet">' + cnt + '×</span>';
+          (zu.staffel ? '' : '<span class="zu-s-cnt" title="richtig zugeordnet">' + cnt + '×</span>');
       } else {
         row.innerHTML = '<span class="zu-s-text">' + escapeHtml(l.text) + '</span>';
       }
       leftsEl.appendChild(row);
     });
 
-    // Rechte Spalte (Kärtchen)
+    // Rechte Spalte (Kärtchen); bei der Aufloesung nur die Ablenker, angehaengt an die Paarliste.
     rightsEl.innerHTML = '';
     rights.forEach((r) => {
       const isDist = reveal && zu.distractors && zu.distractors.indexOf(r.id) >= 0;
+      if (reveal && !isDist) return;
       const cell = document.createElement('div');
       cell.className = 'zu-s-card' + (isDist ? ' distractor' : '');
       cell.innerHTML = '<span class="zu-s-letter">' + letterOf[r.id] + '</span>' +
         '<span class="zu-s-ctext">' + escapeHtml(r.text) + '</span>' +
         (isDist ? '<span class="zu-s-dbadge">Ablenker</span>' : '');
-      rightsEl.appendChild(cell);
+      (reveal ? leftsEl : rightsEl).appendChild(cell);
     });
 
     if (reveal) {
       statusEl.textContent = '';
       finalEl.classList.remove('hidden');
-      renderLeaderboard(finalEl, s);
     } else {
       finalEl.classList.add('hidden');
-      statusEl.textContent = masterOnly ? '🎯 Der Master ordnet zu …' : '📱 Ordne am Handy zu!';
+      statusEl.textContent = staffelLive ? '' : (masterOnly ? '🎯 Der Master ordnet zu …' : '📱 Ordne am Handy zu!');
     }
 
     // Nur-Master-Modus: statt der Handy-Liste zeigt der Bildschirm live dasselbe
     // Drag&Drop-Board wie ein Spieler (s. zuFillBoard) – der Master zieht im
     // Master-Panel (mountPlayerProxy), das Ergebnis (game.zu.groupPick) landet
     // hier 1:1, aber rein zur Anzeige, ohne Teilnehmerbindung/Punktevergabe.
-    if (!reveal && masterOnly) {
+    if (!reveal && (masterOnly || staffelLive)) {
       liveEl.classList.remove('hidden');
       liveEl.innerHTML =
-        '<div class="zu-s-livetitle">🗳️ Gruppen-Wahl</div>' +
+        '<div class="zu-s-livetitle">' + (staffelLive ? staffelBannerHtml(zu.staffel, false) : '🗳️ Gruppen-Wahl') + '</div>' +
         '<div class="zu-board zu-s-board">' +
           '<div class="zu-lefts" data-el="livelefts"></div>' +
           '<div class="zu-pool" data-drop="pool">' +
@@ -388,7 +457,8 @@ function createZuScreen(root, ctx) {
         poolCardsEl: liveEl.querySelector('[data-el="livepoolcards"]'),
         poolCapEl: liveEl.querySelector('[data-el="livepoolcap"]')
       }, {
-        lefts, rights, placement: zu.groupPick, phase: 'matching', draggable: false,
+        lefts, rights, phase: 'matching', draggable: false,
+        placement: staffelLive ? zuStaffelPlacement(zu.staffel) : zu.groupPick,
         poolCapText: 'Noch offene Kärtchen'
       });
     } else {
@@ -412,6 +482,10 @@ function createZuMaster(root, ctx) {
       '</div>' +
       '<p class="muted small" data-el="hint"></p>' +
     '</section>' +
+    '<section class="panel hidden" data-el="stsec">' +
+      '<h3>Staffel</h3>' +
+      '<div data-el="stpanel"></div>' +
+    '</section>' +
     '<section class="panel">' +
       '<h3>Lösung</h3>' +
       '<div class="zu-m-solution" data-el="solution"></div>' +
@@ -421,11 +495,20 @@ function createZuMaster(root, ctx) {
       '<p class="muted small">Ziehen wie am Spieler-Handy – ohne Teilnehmerbindung, keine Punktevergabe, live auf dem Bildschirm sichtbar.</p>' +
       '<div data-el="selfplay"></div>' +
     '</section>' +
-    '<section class="panel">' +
+    '<section class="panel" data-el="answersec">' +
       '<h3>Zuordnungen (<span data-el="acount">0</span>)</h3>' +
       '<div class="mc-m-players" data-el="players"></div>' +
     '</section>';
 
+  const stSecEl = root.querySelector('[data-el="stsec"]');
+  const answerSecEl = root.querySelector('[data-el="answersec"]');
+  const stPanel = createStaffelMasterPanel(root.querySelector('[data-el="stpanel"]'), ctx);
+  const stBoardEl = document.createElement('div');
+  stBoardEl.className = 'zu-board zu-s-board';
+  stBoardEl.innerHTML =
+    '<div class="zu-lefts" data-el="stlefts"></div>' +
+    '<div class="zu-pool"><div class="zu-pool-cap">Noch offene Kärtchen</div><div class="zu-pool-cards" data-el="stpool"></div></div>';
+  stPanel.previewEl.appendChild(stBoardEl);
   const phaseEl = root.querySelector('[data-el="phase"]');
   const hintEl = root.querySelector('[data-el="hint"]');
   const solutionEl = root.querySelector('[data-el="solution"]');
@@ -459,10 +542,26 @@ function createZuMaster(root, ctx) {
     startBtn.disabled = !(phase === 'lobby') || totalLefts === 0;
     revealBtn.disabled = phase !== 'matching';
 
+    const stMode = !!zu.staffel;
+    const cfgStaffel = !!(cfg && cfg.modus === 'staffel');
+    // Staffel: Panel mit Wer-ist-dran, Hinweis und Richtig/Falsch statt Spielerliste/Selbstspiel.
+    stSecEl.classList.toggle('hidden', !stMode);
+    answerSecEl.classList.toggle('hidden', stMode);
+    if (stMode) {
+      stPanel.update(s, zu.staffel);
+      zuFillBoard({
+        leftsEl: stBoardEl.querySelector('[data-el="stlefts"]'),
+        poolCardsEl: stBoardEl.querySelector('[data-el="stpool"]')
+      }, { lefts: zu.lefts || [], rights: zu.rights || [], placement: zuStaffelPlacement(zu.staffel), phase: 'matching', draggable: false, poolCapText: null });
+    }
+
     if (totalLefts === 0) {
       hintEl.textContent = 'Keine Zuordnungen in diesem Profil. Lege sie im Tab „🎲 Spiele" → „⚙️ Konfigurieren" an.';
     } else if (phase === 'lobby') {
-      hintEl.textContent = totalLefts + ' Zuordnung' + (totalLefts === 1 ? '' : 'en') + ' bereit · ' + (cfg ? cfg.punkte : '?') + ' Punkte je Treffer.';
+      hintEl.textContent = totalLefts + ' Zuordnung' + (totalLefts === 1 ? '' : 'en') + ' bereit · ' + (cfg ? cfg.punkte : '?') +
+        (cfgStaffel ? ' Punkte je richtigem Zug (Staffel, im Team geteilt; nur vollständige Paare).' : ' Punkte je Treffer.');
+    } else if (phase === 'matching' && stMode) {
+      hintEl.textContent = 'Das aktive Team ordnet je Zug ein Kärtchen zu. Unten bewerten; „Auflösen" bricht ohne Punkte ab.';
     } else if (phase === 'matching') {
       hintEl.textContent = 'Spieler ordnen am Handy zu. „Auflösen" wertet und vergibt Punkte.';
     } else {
@@ -541,7 +640,7 @@ function createZuMaster(root, ctx) {
     });
     if (players.length === 0) playersEl.innerHTML = '<p class="muted small">Noch keine Spieler verbunden.</p>';
 
-    const masterOnly = !!(s.settings && s.settings.masterOnlyMode);
+    const masterOnly = !!(s.settings && s.settings.masterOnlyMode) && !stMode && !cfgStaffel;   // Staffel hat keinen Nur-Master-Modus
     selfplaySecEl.classList.toggle('hidden', !masterOnly);
     if (masterOnly) selfplay.update(s);
   }

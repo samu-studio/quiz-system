@@ -582,13 +582,15 @@ html.disco { animation: discoHue 4s linear infinite; }
 }
 /* ---- Schnellumfrage (Fun-Pannel): kleines Ergebnis-Kaestchen am Bildschirm + Ja/Nein-Karte am Handy ---- */
 .poll-widget {
+  --poll-scale: 1; /* Anzeigegroesse, vom Master per Regler im Fun-Tab gesetzt (50..300%) */
   position: absolute; z-index: 30;
   left: clamp(1rem, 3vw, 2.5rem); top: clamp(.8rem, 2vh, 1.6rem);
-  width: clamp(220px, 22vw, 340px); padding: .7rem .9rem;
+  width: calc(clamp(220px, 22vw, 340px) * var(--poll-scale)); max-width: calc(100% - 2rem);
+  padding: calc(.7rem * var(--poll-scale)) calc(.9rem * var(--poll-scale));
   background: linear-gradient(180deg, var(--panel), var(--bg2));
   border: 1px solid var(--border); border-radius: var(--radius);
   box-shadow: 0 8px 24px rgba(0,0,0,.35);
-  font-size: clamp(.8rem, 1.1vw, 1rem);
+  font-size: calc(clamp(.8rem, 1.1vw, 1rem) * var(--poll-scale));
 }
 .poll-widget.closed { border-color: var(--accent); }
 .poll-widget .poll-q { font-weight: 800; margin-bottom: .45rem; overflow-wrap: anywhere; }
@@ -927,7 +929,6 @@ html.disco { animation: discoHue 4s linear infinite; }
 .player-feedback { font-size: 1.5rem; font-weight: 800; text-align: center; min-height: 1.5em; }
 .player-feedback.false { color: var(--danger); }
 .player-feedback.good { color: var(--success); }
-.player-score { color: var(--muted); font-weight: 600; }
 
 /* ---- Eigener Verbindungs-Status (kleines Symbol) ---- */
 .self-dot { display: inline-flex; align-items: center; }
@@ -1241,7 +1242,6 @@ html.disco { animation: discoHue 4s linear infinite; }
 .mc-p-feedback.good { color: var(--success); }
 .mc-p-feedback.false { color: var(--danger); }
 .mc-p-feedback.miss { color: var(--warn); }
-.mc-p-score { color: var(--muted); font-weight: 700; text-align: center; }
 
 /* ---- Master ---- */
 .mc-m-question { font-weight: 800; font-size: 1.15rem; margin-bottom: .7rem; }
@@ -1314,13 +1314,6 @@ html.disco { animation: discoHue 4s linear infinite; }
   margin-top: -.4rem; color: var(--muted); font-weight: 800;
   text-transform: uppercase; letter-spacing: .12em; font-size: .95rem;
 }
-/* ---- Spieler: kompakter Zaehler ---- */
-.zd-p-points {
-  font-size: clamp(2.6rem, 15vw, 4.2rem); font-weight: 900; line-height: 1; text-align: center;
-  color: var(--success); font-variant-numeric: tabular-nums; min-height: 1em;
-}
-.zd-p-points.low { color: var(--danger); }
-.zd-p-points.locked { color: var(--accent); }
 /* ---- Master: eingefrorene Punkte je Spieler ---- */
 .mc-m-prow .zd-m-pts {
   flex: none; font-weight: 800; font-variant-numeric: tabular-nums;
@@ -1469,9 +1462,6 @@ html.disco { animation: discoHue 4s linear infinite; }
 /* ---- Spieler ---- */
 .tf-player { width: min(96vw, 460px); display: flex; flex-direction: column; gap: 1rem; align-items: center; }
 .tf-p-counter { color: var(--muted); font-weight: 700; text-align: center; }
-.tf-p-points { font-size: 2rem; font-weight: 900; font-variant-numeric: tabular-nums; }
-.tf-p-points.low { color: var(--danger); }
-.tf-p-points.locked { color: var(--accent); }
 .tf-p-statement { font-size: 1.4rem; font-weight: 800; text-align: center; line-height: 1.2; }
 .tf-p-choices { width: 100%; display: flex; flex-direction: column; gap: .8rem; }
 .tf-choice {
@@ -1556,14 +1546,21 @@ html.disco { animation: discoHue 4s linear infinite; }
 .zu-p-feedback { font-size: 1.15rem; font-weight: 800; text-align: center; min-height: 1.4em; }
 .zu-p-feedback.good { color: var(--success); }
 .zu-p-feedback.false { color: var(--warn); }
-.zu-p-score { color: var(--muted); font-weight: 700; text-align: center; }
 
 /* ---- Bildschirm ---- */
 .zu-screen { width: min(1100px, 95vw); display: flex; flex-direction: column; align-items: center; gap: 1.4rem; }
 .zu-s-title { font-size: clamp(1.6rem, 4.5vw, 2.8rem); font-weight: 900; color: var(--accent); text-align: center; }
 .zu-s-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 1.6rem; width: 100%; }
 .zu-s-head { font-weight: 800; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; font-size: 1rem; margin-bottom: .6rem; text-align: center; }
-.zu-s-lefts, .zu-s-rights { display: flex; flex-direction: column; gap: .5rem; }
+.zu-s-col { display: flex; flex-direction: column; }
+/* Aufloesung: eine gemeinsame Liste (Paare + Ablenker), keine Kaertchen-Spalte. */
+.zu-s-cols.merged { grid-template-columns: 1fr; width: min(800px, 100%); }
+.zu-s-cols.merged .zu-s-col + .zu-s-col { display: none; }
+.zu-s-cols.merged .zu-s-lefts { justify-content: flex-start; }
+/* Ungleich lange Spalten (Ablenker / „keine Verbindung") nicht treppenartig
+   versetzt enden lassen: die kuerzere Spalte verteilt ihre Eintraege auf die
+   Hoehe der laengeren. */
+.zu-s-lefts, .zu-s-rights { display: flex; flex-direction: column; gap: .5rem; flex: 1; justify-content: space-around; }
 .zu-s-item {
   display: flex; align-items: center; gap: .6rem; flex-wrap: wrap;
   padding: .5em .8em; background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
@@ -2509,6 +2506,20 @@ html.disco { animation: discoHue 4s linear infinite; }
 .pl-run-title { font-weight: 800; }
 .pl-run-btns { display: flex; gap: .6rem; }
 .pl-run-btns .btn { flex: 1; }
+.pl-run-note {
+  margin-top: .6rem; padding: .55rem .7rem; border-radius: var(--radius, 10px);
+  border-left: 3px solid var(--accent); background: color-mix(in srgb, var(--accent) 10%, transparent);
+  white-space: pre-wrap; overflow-wrap: anywhere; font-size: .92rem;
+}
+.pl-car-note { margin-left: auto; font-size: .85rem; opacity: .8; }
+.pl-note-btn { opacity: .45; }
+.pl-note-btn.has-note { opacity: 1; border-color: var(--accent); }
+.note-text {
+  width: 100%; box-sizing: border-box; margin: .5rem 0 1rem; padding: .6rem;
+  font: inherit; color: var(--text); background: var(--panel); resize: vertical;
+  border: 1px solid var(--border, #444); border-radius: var(--radius, 10px);
+}
+.note-text:focus { border-color: var(--accent); outline: none; }
 
 /* Vertikales Karussell: max. 5 Schritte übereinander, aktives mittig, oben/unten
    ausgefadet, keine Scrollbar (overflow:hidden + translateY am Track). */
@@ -2651,7 +2662,6 @@ html.disco { animation: discoHue 4s linear infinite; }
 .ro-p-feedback { font-size: 1.15rem; font-weight: 800; text-align: center; min-height: 1.4em; }
 .ro-p-feedback.good { color: var(--success); }
 .ro-p-feedback.false { color: var(--warn); }
-.ro-p-score { color: var(--muted); font-weight: 700; text-align: center; }
 
 .ro-screen { width: min(700px, 95vw); display: flex; flex-direction: column; align-items: center; gap: 1.4rem; }
 .ro-s-title { font-size: clamp(1.6rem, 4.5vw, 2.8rem); font-weight: 900; color: var(--accent); text-align: center; }
@@ -2663,6 +2673,48 @@ html.disco { animation: discoHue 4s linear infinite; }
 .ro-s-live { display: flex; flex-direction: column; align-items: center; gap: .8rem; width: 100%; }
 .ro-s-live.hidden { display: none; }
 .ro-s-livetitle { font-weight: 800; font-size: 1.2rem; }
+
+/* Aufloesung + Endstand: volle Breite, Loesung als Pfeil-Ablauf statt Akzent-Kaertchen */
+.ro-screen.wide { width: min(1500px, 96vw); gap: 2rem; }
+.ro-s-reveal { display: flex; flex-direction: column; align-items: center; gap: 2.2rem; width: 100%; }
+.ro-s-reveal.hidden, .ro-s-final.hidden { display: none; }
+.ro-flow {
+  display: flex; flex-wrap: wrap; justify-content: center; align-items: center;
+  gap: 1.1rem 0; width: 100%; font-size: clamp(1.05rem, 2vw, 1.55rem);
+}
+.ro-flow-unit {
+  display: flex; align-items: center;
+  animation: ro-step-in .45s ease-out backwards; animation-delay: calc(var(--i) * 110ms);
+}
+.ro-step {
+  display: flex; align-items: center; gap: .7em; padding: .55em 1.1em .55em .55em;
+  background: color-mix(in srgb, var(--panel-2) 80%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--border));
+  border-radius: 999px; box-shadow: 0 6px 22px rgba(0,0,0,.22);
+  backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+  font-weight: 800; color: var(--text);
+}
+.ro-step-nr {
+  flex: none; display: grid; place-items: center; width: 2em; height: 2em; border-radius: 50%;
+  background: color-mix(in srgb, var(--accent) 20%, transparent); color: var(--accent);
+  border: 2px solid var(--accent); font-weight: 900; font-size: .85em;
+}
+.ro-step-text { max-width: 26ch; }
+.ro-arrow { flex: none; display: grid; place-items: center; width: 2.4em; color: var(--accent); }
+.ro-arrow svg { width: 1.5em; height: 1.5em; fill: none; stroke: currentColor; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; opacity: .85; }
+@keyframes ro-step-in { from { opacity: 0; transform: translateX(-10px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .ro-flow-unit { animation: none; } }
+.ro-s-final .mc-final-title { font-size: clamp(2.2rem, 6vw, 4rem); }
+
+/* Spieler-Aufloesung: neutrale Karten, ✓ bzw. richtiger Platz rechts */
+.ro-list.ro-reveal .ro-card {
+  background: var(--panel-2); color: var(--text); box-shadow: none;
+  border: 1px solid var(--border); border-left: 5px solid var(--danger);
+}
+.ro-list.ro-reveal .ro-card.correct { border-left-color: var(--success); }
+.ro-list.ro-reveal .ro-handle { display: none; }
+.ro-pos { flex: none; font-weight: 900; color: var(--danger); }
+.ro-card.correct .ro-pos { color: var(--success); }
 
 .ro-m-solution { display: flex; flex-direction: column; gap: .35rem; }
 .ro-m-sol-list { margin: 0; padding-left: 1.4rem; display: flex; flex-direction: column; gap: .25rem; font-weight: 700; }
@@ -2694,7 +2746,6 @@ html.disco { animation: discoHue 4s linear infinite; }
 }
 .zm-p-timer { font-weight: 800; color: var(--warn); text-align: center; min-height: 1.4em; }
 .zm-s-status { color: var(--muted); font-weight: 700; text-align: center; }
-.zm-p-score { color: var(--muted); font-weight: 700; text-align: center; }
 
 .zm-draw { display: flex; flex-direction: column; align-items: center; gap: .6rem; width: 100%; }
 .zm-canvas {
@@ -2860,3 +2911,38 @@ html.disco { animation: discoHue 4s linear infinite; }
 #msg-send-info { margin: 1rem 0 .6rem; min-height: 1.2em; }
 #msg-send-info + .fun-popup-all { margin-top: .6rem; margin-bottom: 1rem; }
 .msg-presets { margin-bottom: .4rem; }
+
+/* ---------------------------------------------------------------------- */
+/* Staffel-Modus (ro/zu) – Teams reihum, je Zug ein Wort (s. lib/staffel.js) */
+/* ---------------------------------------------------------------------- */
+.st-who {
+  display: inline-block; font-weight: 800; padding: .1em .6em; border-radius: 999px;
+  border: 2px solid var(--st-col, var(--accent));
+  background: color-mix(in srgb, var(--st-col, var(--accent)) 22%, transparent);
+}
+.st-banner { text-align: center; font-weight: 800; font-size: 1.15rem; }
+.st-banner.hidden { display: none; }
+.st-s-banner { font-size: clamp(1.3rem, 3vw, 2rem); }
+.ro-staffel, .ro-s-staffel { display: flex; flex-direction: column; gap: .8rem; width: 100%; }
+.ro-staffel.hidden, .ro-s-staffel.hidden { display: none; }
+.ro-st-pool {
+  display: flex; flex-wrap: wrap; gap: .5rem; min-height: 3.2rem; padding: .6rem;
+  border: 2px dashed var(--border); border-radius: var(--radius);
+}
+.ro-st-pool.hidden, .ro-st-board.hidden { display: none; }
+.ro-st-pool .ro-card { flex: 1 1 40%; }
+.ro-s-pool .ro-card { font-size: 1.1rem; }
+.ro-st-board, .ro-st-pool, .zu-lefts { -webkit-user-select: none; user-select: none; }   /* kein Text markieren beim Ziehen */
+.ro-card.locked { background: var(--panel-2); color: var(--text); border-color: var(--success); }
+.ro-card.locked .ro-handle { display: none; }
+.ro-card.draft { outline: 3px solid var(--warn); }
+.zu-card.locked { background: var(--panel-2); color: var(--text); border-color: var(--success); cursor: default; }
+
+.st-m-who { font-weight: 800; margin-bottom: .5rem; }
+.st-m-units { display: flex; flex-wrap: wrap; gap: .4rem; margin-bottom: .6rem; }
+.st-unit { border: 2px solid var(--st-col, var(--accent)); }
+.st-unit.offline { opacity: .5; }
+.st-m-status { font-weight: 700; margin-bottom: .6rem; color: var(--muted); }
+.st-m-status.good { color: var(--success); }
+.st-m-status.bad { color: var(--warn); }
+.st-m-preview { margin-bottom: .8rem; }

@@ -50,6 +50,18 @@
   </div>
 </div>
 
+<!-- Notiz-Dialog (Spielplan-Schritte), s. noteModal() in core.js -->
+<div id="note-overlay" class="overlay hidden">
+  <div class="overlay-box">
+    <h2 id="note-title">Notiz</h2>
+    <textarea id="note-text" class="note-text" rows="6" maxlength="2000" placeholder="Notizen für diesen Schritt (nur für den Master sichtbar)"></textarea>
+    <div class="overlay-actions">
+      <button id="note-cancel" class="btn btn-ghost">Abbrechen</button>
+      <button id="note-ok" class="btn btn-primary">Speichern</button>
+    </div>
+  </div>
+</div>
+
 <!-- ===================== BILDSCHIRM ===================== -->
 <main id="view-screen" class="view hidden">
   <!-- Design-Hintergrund (Bild/Effekte/Vignette) – nur Bildschirm, per JS befuellt -->
@@ -233,6 +245,7 @@
         <button id="pl-prev" class="btn btn-ghost">◀ Zurück</button>
         <button id="pl-next" class="btn btn-primary">Nächstes ▶</button>
       </div>
+      <div class="pl-run-note hidden" id="pl-run-note"></div>
     </section>
 
     <!-- 5. Wertung (Team-Modus, generisch, spielunabhängig) -->
@@ -567,6 +580,31 @@
           </div>
           <div id="msg-list" class="fun-popup-list"></div>
         </div>
+        <!-- Emoji-Reaktionen: Spieler koennen jederzeit ein Emoji abschicken, das am Bildschirm aufschwebt -->
+        <div class="design-section">
+          <div class="sb-toggle-row">
+            <span class="sb-toggle-label">😀 Emoji-Reaktionen</span>
+            <label class="switch">
+              <input type="checkbox" id="reactions-switch" />
+              <span class="switch-track"><span class="switch-thumb"></span></span>
+            </label>
+          </div>
+          <div class="sb-toggle-row">
+            <span class="sb-toggle-label">Begrenzung</span>
+            <div id="reactions-limit" class="seg">
+              <button class="seg-btn" data-limit="none">Keine Begrenzung</button>
+              <button class="seg-btn" data-limit="5s">5 pro Sek.</button>
+              <button class="seg-btn" data-limit="1s">1 pro Sek.</button>
+              <button class="seg-btn" data-limit="10s">1 pro 10 Sek.</button>
+            </div>
+          </div>
+          <div class="aq-vol-row">
+            <span class="aq-vol-label">🔊 Lautstärke Sound</span>
+            <input class="aq-vol-slider" id="reactions-volume" type="range" min="0" max="100" step="1" value="50" />
+            <span class="aq-vol-val" id="reactions-volume-val">50 %</span>
+          </div>
+          <p class="design-hint">Spieler koennen jederzeit ein Emoji abschicken, das am Bildschirm aufschwebt. Jede Reaktion kann auf Wunsch des Spielers zusaetzlich einen kurzen Sound am Bildschirm ausloesen.</p>
+        </div>
         <div class="design-section">
           <div class="sb-toggle-row">
             <span class="sb-toggle-label">🚂 Hype-Meter / Hype-Train</span>
@@ -575,7 +613,7 @@
               <span class="switch-track"><span class="switch-thumb"></span></span>
             </label>
           </div>
-          <p class="design-hint">Applausometer am Bildschirm: Schicken die Spieler viele Emoji-Reaktionen, erscheint oben ein kleiner Balken, der sich fuellt. Ist er voll, faehrt der Hype-Train eine Stufe hoeher. Ebbt die Stimmung ab, verschwindet er wieder. Braucht aktivierte Emoji-Reaktionen (Tab ⚙️ Allgemein).</p>
+          <p class="design-hint">Applausometer am Bildschirm: Schicken die Spieler viele Emoji-Reaktionen, erscheint oben ein kleiner Balken, der sich fuellt. Ist er voll, faehrt der Hype-Train eine Stufe hoeher. Ebbt die Stimmung ab, verschwindet er wieder. Braucht aktivierte Emoji-Reaktionen (oben).</p>
           <div class="sb-toggle-row">
             <span class="sb-toggle-label">Empfindlichkeit</span>
             <div id="hype-sensitivity" class="seg">
@@ -648,6 +686,7 @@
             <button id="fun-poll-close" class="btn">⏹ Beenden</button>
             <button id="fun-poll-hide" class="btn btn-danger">✖ Ausblenden</button>
           </div>
+          <div class="slider-row"><label>Größe am Bildschirm</label><input id="fun-poll-scale" type="range" min="50" max="300" step="10" value="100" /><span class="sv" id="fun-poll-scale-v">100 %</span></div>
           <p id="fun-poll-status" class="muted small">Keine Umfrage aktiv.</p>
         </div>
         <div class="design-section">
@@ -739,31 +778,6 @@
       <p class="muted small">Ohne Spieler-Handys spielen: im Tab „🎮 Controls" erscheinen zusaetzliche Stellvertreter-Steuerungen, und im Geraete-Menue kannst du lokale Teilnehmer ohne eigenes Geraet anlegen. Echte Spieler koennen trotzdem jederzeit dazustossen.</p>
     </section>
 
-    <!-- Emoji-Reaktionen: Spieler koennen jederzeit ein Emoji abschicken, das am Bildschirm aufschwebt -->
-    <section class="panel">
-      <div class="sb-toggle-row">
-        <span class="sb-toggle-label">😀 Emoji-Reaktionen</span>
-        <label class="switch">
-          <input type="checkbox" id="reactions-switch" />
-          <span class="switch-track"><span class="switch-thumb"></span></span>
-        </label>
-      </div>
-      <div class="sb-toggle-row">
-        <span class="sb-toggle-label">Begrenzung</span>
-        <div id="reactions-limit" class="seg">
-          <button class="seg-btn" data-limit="none">Keine Begrenzung</button>
-          <button class="seg-btn" data-limit="5s">5 pro Sek.</button>
-          <button class="seg-btn" data-limit="1s">1 pro Sek.</button>
-          <button class="seg-btn" data-limit="10s">1 pro 10 Sek.</button>
-        </div>
-      </div>
-      <div class="aq-vol-row">
-        <span class="aq-vol-label">🔊 Lautstärke Sound</span>
-        <input class="aq-vol-slider" id="reactions-volume" type="range" min="0" max="100" step="1" value="50" />
-        <span class="aq-vol-val" id="reactions-volume-val">50 %</span>
-      </div>
-      <p class="muted small">Spieler koennen jederzeit ein Emoji abschicken, das am Bildschirm aufschwebt. Jede Reaktion kann auf Wunsch des Spielers zusaetzlich einen kurzen Sound am Bildschirm ausloesen.</p>
-    </section>
     <!-- Session-Endscreen: welche Fun-Fact-Kacheln gezeigt werden + manueller Reset -->
     <section class="panel">
       <div class="sb-toggle-row">
@@ -867,6 +881,7 @@
 <script src="/js/game-zd.js"></script>
 <script src="/js/game-fw.js"></script>
 <script src="/js/game-tf.js"></script>
+<script src="/js/staffel.js"></script>
 <script src="/js/game-zu.js"></script>
 <script src="/js/game-dq.js"></script>
 <script src="/js/game-sq.js"></script>

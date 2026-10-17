@@ -15,8 +15,7 @@ function createMcScreen(root, ctx) {
       '<div class="mc-answered" data-el="answered"></div>' +
       '<div class="mc-group-pick" data-el="grouppick"></div>' +
       '<div class="mc-final" data-el="final">' +
-        '<div class="mc-final-title">🏁 Endstand</div>' +
-        '<div class="leaderboard"></div>' +
+        '<div class="mc-final-title">🏁 Quiz beendet</div>' +
       '</div>' +
     '</div>';
   const introEl = root.querySelector('[data-el="intro"]');
@@ -39,7 +38,6 @@ function createMcScreen(root, ctx) {
       groupPickEl.classList.add('hidden');
       counterEl.textContent = mc.total + ' Fragen';
       finalEl.classList.remove('hidden');
-      renderLeaderboard(finalEl, s);
       return;
     }
     finalEl.classList.add('hidden');
@@ -113,21 +111,17 @@ function createMcPlayer(root, ctx) {
       '<div class="mc-p-question" data-el="question"></div>' +
       '<div class="mc-p-answers" data-el="answers"></div>' +
       '<div class="mc-p-feedback" data-el="feedback"></div>' +
-      '<div class="mc-p-score" data-el="score"></div>' +
     '</div>';
   const counterEl = root.querySelector('[data-el="counter"]');
   const qEl = root.querySelector('[data-el="question"]');
   const ansEl = root.querySelector('[data-el="answers"]');
   const fbEl = root.querySelector('[data-el="feedback"]');
-  const scoreEl = root.querySelector('[data-el="score"]');
   const LETTERS = ['A', 'B', 'C', 'D', 'E', 'F'];
 
   function update(s) {
     const mc = s.game.mc;
     if (!mc) return;
     const myAnswer = (s.game.mcMyAnswer === undefined ? null : s.game.mcMyAnswer);
-    const pts = s.game.scores[ctx.clientId()] || 0;
-    scoreEl.textContent = pts > 0 ? 'Deine Punkte: ' + pts : '';
 
     // Lobby / Endstand -> keine Buttons
     if (mc.phase === 'lobby') {
@@ -141,7 +135,7 @@ function createMcPlayer(root, ctx) {
       qEl.textContent = '🏁 Geschafft!';
       ansEl.innerHTML = '';
       fbEl.className = 'mc-p-feedback';
-      fbEl.textContent = pts > 0 ? 'Du hast ' + pts + ' Punkte geholt.' : '';
+      fbEl.textContent = '';
       return;
     }
 
@@ -180,7 +174,7 @@ function createMcPlayer(root, ctx) {
     fbEl.className = 'mc-p-feedback';
     if (reveal) {
       if (myAnswer === null) { fbEl.textContent = 'Keine Antwort'; fbEl.classList.add('miss'); }
-      else if (myAnswer === mc.correct) { fbEl.textContent = '✓ Richtig! +' + mc.points; fbEl.classList.add('good'); }
+      else if (myAnswer === mc.correct) { fbEl.textContent = '✓ Richtig!'; fbEl.classList.add('good'); }
       else { fbEl.textContent = '✗ Leider falsch'; fbEl.classList.add('false'); }
     } else if (myAnswer !== null) {
       fbEl.textContent = 'Antwort gesendet – warte auf die Auflösung';
@@ -227,7 +221,7 @@ function createMcMaster(root, ctx) {
   const revealBtn = root.querySelector('[data-act="mcReveal"]');
   const nextBtn = root.querySelector('[data-act="mcNext"]');
   const LETTERS = ['A', 'B', 'C', 'D', 'E', 'F'];
-  const PHASE_LABEL = { lobby: '⚪ Bereit', question: '❓ Frage läuft', reveal: '💡 Aufgelöst', done: '🏁 Endstand' };
+  const PHASE_LABEL = { lobby: '⚪ Bereit', question: '❓ Frage läuft', reveal: '💡 Aufgelöst', done: '🏁 Beendet' };
 
   root.querySelectorAll('[data-act]').forEach((b) => {
     b.addEventListener('click', async () => {
@@ -261,7 +255,7 @@ function createMcMaster(root, ctx) {
     } else if (phase === 'question') {
       hintEl.textContent = 'Spieler antworten. „Auflösen" vergibt die Punkte.';
     } else if (phase === 'reveal') {
-      hintEl.textContent = mc.number >= mc.total ? 'Letzte Frage – „Weiter" zeigt den Endstand.' : '„Weiter" für die nächste Frage.';
+      hintEl.textContent = mc.number >= mc.total ? 'Letzte Frage – „Weiter" beendet das Quiz.' : '„Weiter" für die nächste Frage.';
     } else {
       hintEl.textContent = 'Quiz beendet. „Zurücksetzen" für einen neuen Durchlauf.';
     }

@@ -14,8 +14,7 @@ function createReactionScreen(root, ctx) {
       '<div class="lamp lamp-green"></div>' +
     '</div>' +
     '<div class="screen-headline">Bereit</div>' +
-    '<div class="results-board"></div>' +
-    '<div class="leaderboard"></div>';
+    '<div class="results-board"></div>';
 
   const light = root.querySelector('.trafficlight');
   const head = root.querySelector('.screen-headline');
@@ -51,8 +50,6 @@ function createReactionScreen(root, ctx) {
         board.appendChild(row);
       });
     }
-
-    renderLeaderboard(root, s);
   }
 
   return { update };
@@ -65,11 +62,8 @@ function createReactionPlayer(root, ctx) {
   btn.textContent = 'Warten…';
   const fb = document.createElement('div');
   fb.className = 'player-feedback';
-  const score = document.createElement('div');
-  score.className = 'player-score';
   root.appendChild(btn);
   root.appendChild(fb);
-  root.appendChild(score);
 
   const onDown = (e) => { e.preventDefault(); pressReaction(ctx); };
   btn.addEventListener('pointerdown', onDown);
@@ -98,9 +92,6 @@ function createReactionPlayer(root, ctx) {
     } else if (phase === 'results') {
       btn.classList.add('done'); btn.textContent = '–'; fb.textContent = 'Runde vorbei';
     }
-
-    const pts = s.game.scores[ctx.clientId()] || 0;
-    score.textContent = pts > 0 ? 'Deine Punkte: ' + pts : '';
   }
 
   return { update, destroy() { btn.removeEventListener('pointerdown', onDown); } };

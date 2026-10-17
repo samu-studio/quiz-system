@@ -53,11 +53,6 @@ function createZmPlayer(root, ctx) {
       '</div>' +
       '<div class="zm-gallery zm-p-gallery" data-el="gallery"></div>' +
       '<div class="zm-results" data-el="results"></div>' +
-      '<div class="mc-final" data-el="final">' +
-        '<div class="mc-final-title">🏁 Endstand</div>' +
-        '<div class="leaderboard"></div>' +
-      '</div>' +
-      '<div class="zm-p-score" data-el="score"></div>' +
     '</div>';
 
   const counterEl = root.querySelector('[data-el="counter"]');
@@ -70,8 +65,6 @@ function createZmPlayer(root, ctx) {
   const sizesEl = root.querySelector('[data-el="sizes"]');
   const galleryEl = root.querySelector('[data-el="gallery"]');
   const resultsEl = root.querySelector('[data-el="results"]');
-  const finalEl = root.querySelector('[data-el="final"]');
-  const scoreEl = root.querySelector('[data-el="score"]');
   const eraserBtn = root.querySelector('[data-act="eraser"]');
   const undoBtn = root.querySelector('[data-act="undo"]');
   const clearBtn = root.querySelector('[data-act="clear"]');
@@ -210,8 +203,6 @@ function createZmPlayer(root, ctx) {
   function update(s) {
     const zm = s.game.zm;
     if (!zm) return;
-    const pts = s.game.scores[ctx.clientId()] || 0;
-    scoreEl.textContent = pts > 0 ? 'Deine Punkte: ' + pts : '';
 
     counterEl.textContent = (zm.phase === 'lobby' || zm.phase === 'done')
       ? (zm.total ? zm.total + ' Begriffe' : '')
@@ -220,7 +211,6 @@ function createZmPlayer(root, ctx) {
     drawEl.classList.add('hidden');
     galleryEl.classList.add('hidden');
     resultsEl.classList.add('hidden');
-    finalEl.classList.add('hidden');
 
     if (zm.phase === 'lobby') {
       begriffEl.textContent = 'Warte auf den Start …';
@@ -231,8 +221,6 @@ function createZmPlayer(root, ctx) {
     if (zm.phase === 'done') {
       begriffEl.textContent = '🏁 Geschafft!';
       timerEl.textContent = '';
-      finalEl.classList.remove('hidden');
-      renderLeaderboard(finalEl, s);
       return;
     }
 
@@ -299,8 +287,7 @@ function createZmPlayer(root, ctx) {
         row.innerHTML =
           (r.image ? '<img class="zm-result-thumb" src="' + r.image + '" alt="">' : '') +
           '<span class="zm-result-name">' + avatarChip(r) + escapeHtml(r.name) + '</span>' +
-          '<span class="zm-result-votes">🗳️ ' + r.votes + '</span>' +
-          '<span class="zm-result-pts">+' + r.points + '</span>';
+          '<span class="zm-result-votes">🗳️ ' + r.votes + '</span>';
         resultsEl.appendChild(row);
       });
       return;
@@ -327,8 +314,7 @@ function createZmScreen(root, ctx) {
         '<div class="zm-s-resultlist" data-el="resultlist"></div>' +
       '</div>' +
       '<div class="mc-final" data-el="final">' +
-        '<div class="mc-final-title">🏁 Endstand</div>' +
-        '<div class="leaderboard"></div>' +
+        '<div class="mc-final-title">🏁 Quiz beendet</div>' +
       '</div>' +
     '</div>';
   const introEl = root.querySelector('[data-el="intro"]');
@@ -372,7 +358,6 @@ function createZmScreen(root, ctx) {
       counterEl.textContent = zm.total + ' Begriffe';
       begriffEl.classList.add('hidden'); statusEl.classList.add('hidden');
       finalEl.classList.remove('hidden');
-      renderLeaderboard(finalEl, s);
       return;
     }
 
@@ -471,7 +456,7 @@ function createZmMaster(root, ctx) {
   const votingBtn = root.querySelector('[data-act="zmToVoting"]');
   const revealBtn = root.querySelector('[data-act="zmReveal"]');
   const nextBtn = root.querySelector('[data-act="zmNext"]');
-  const PHASE_LABEL = { lobby: '⚪ Bereit', drawing: '✏️ Zeichnen', voting: '🗳 Abstimmung', reveal: '📢 Aufgelöst', done: '🏁 Endstand' };
+  const PHASE_LABEL = { lobby: '⚪ Bereit', drawing: '✏️ Zeichnen', voting: '🗳 Abstimmung', reveal: '📢 Aufgelöst', done: '🏁 Beendet' };
 
   root.querySelectorAll('[data-act]').forEach((b) => {
     b.addEventListener('click', async () => {
@@ -491,7 +476,7 @@ function createZmMaster(root, ctx) {
     progEl.textContent = (phase === 'lobby' || phase === 'done') ? (totalC + ' Begriffe') : (zm.pos + '/' + zm.total);
 
     const isLast = zm.pos >= zm.total;
-    nextBtn.textContent = (phase === 'reveal' && isLast) ? '🏁 Endstand' : '⏭ Nächste Runde';
+    nextBtn.textContent = (phase === 'reveal' && isLast) ? '🏁 Beenden' : '⏭ Nächste Runde';
 
     startBtn.disabled = phase !== 'lobby' || totalC === 0;
     votingBtn.disabled = phase !== 'drawing';
@@ -507,7 +492,7 @@ function createZmMaster(root, ctx) {
     } else if (phase === 'voting') {
       hintEl.textContent = 'Spieler stimmen für ihre Favoriten. „Auswerten" vergibt die Punkte.';
     } else if (phase === 'reveal') {
-      hintEl.textContent = isLast ? 'Letzte Runde – „Endstand" zeigt die Gesamtwertung.' : '„Nächste Runde" geht weiter.';
+      hintEl.textContent = isLast ? 'Letzte Runde – „Beenden" schließt das Spiel ab.' : '„Nächste Runde" geht weiter.';
     } else {
       hintEl.textContent = 'Quiz beendet. „Zurücksetzen" für einen neuen Durchlauf.';
     }

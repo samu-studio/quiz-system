@@ -38,7 +38,7 @@
 
 // Bildschirm/Spieler-Handy kurz weiss aufblitzen lassen, dann ueber 500ms ausblenden.
 function triggerFlashbang() {
-  if (role !== 'player') return; // wirkt bewusst nur auf Spieler-Handys
+  if (role === 'master') return; // wirkt bewusst nur auf Bildschirm + Spieler
   const el = document.getElementById('flashbang-overlay');
   if (!el) return;
   el.style.transition = 'none';
@@ -121,7 +121,7 @@ function hypeSetVisible(on) {
 // `ms` zurueckdrehen. Erneutes Ausloesen waehrend des Kopfstands verlaengert ihn.
 let kopfstandTimer = null;
 function triggerKopfstand(ms) {
-  if (role === 'master') return; // wirkt bewusst nur auf Bildschirm + Spieler
+  if (role !== 'player') return; // wirkt bewusst nur auf Spieler-Handys, der Bildschirm bleibt aufrecht
   const dauer = Math.max(1000, Math.min(60000, Number(ms) || 10000));
   document.documentElement.classList.add('fun-kopfstand');
   clearTimeout(kopfstandTimer);
@@ -345,6 +345,7 @@ function renderScreenPoll(s) {
   if (!poll) return;
   const pct = (n) => (poll.total ? Math.round(n / poll.total * 100) : 0);
   el.classList.toggle('closed', poll.status === 'closed');
+  el.style.setProperty('--poll-scale', (poll.scale || 100) / 100);
   el.innerHTML =
     '<div class="poll-q">📊 ' + escapeHtml(poll.question) + '</div>' +
     '<div class="poll-row poll-ja"><span class="poll-lbl">Ja</span><span class="poll-bar"><span style="width:' + pct(poll.ja) + '%"></span></span><b>' + poll.ja + '</b></div>' +
@@ -394,6 +395,12 @@ function setupFunTab() {
   $('fun-poll-start').addEventListener('click', () => send({ type: 'master', action: 'pollStart', question: q.value }));
   $('fun-poll-close').addEventListener('click', () => send({ type: 'master', action: 'pollClose' }));
   $('fun-poll-hide').addEventListener('click', () => send({ type: 'master', action: 'pollHide' }));
+  const pollScale = $('fun-poll-scale');
+  pollScale.addEventListener('input', () => {
+    $('fun-poll-scale-v').textContent = pollScale.value + ' %';
+    paintPlainRange(pollScale);
+  });
+  pollScale.addEventListener('change', () => sendFunSettings({ pollScale: +pollScale.value }));
   const hypeSwitch = document.getElementById('hype-switch');
   if (hypeSwitch) {
     hypeSwitch.addEventListener('change', () =>
@@ -845,6 +852,12 @@ function renderFunTab(s) {
     setVal('fun-cd-sek', fun.countdownSek);
     setVal('fun-cd-warn', fun.countdownWarn);
     if (!funPollTimer) setVal('fun-poll-question', fun.pollQuestion);
+    const pollScale = $('fun-poll-scale');
+    if (pollScale && document.activeElement !== pollScale && +pollScale.value !== fun.pollScale) {
+      pollScale.value = fun.pollScale;
+      $('fun-poll-scale-v').textContent = fun.pollScale + ' %';
+      paintPlainRange(pollScale);
+    }
     if (funPopupType !== fun.popupType) {
       funPopupType = fun.popupType;
       document.querySelectorAll('#fun-popup-types .seg-btn').forEach((b) => b.classList.toggle('active', b.dataset.type === funPopupType));

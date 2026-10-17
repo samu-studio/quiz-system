@@ -34,6 +34,19 @@ function roFillList(listEl, order, textOf, draggable, marks) {
   });
 }
 
+// Aufloesungs-Ansicht: die richtige Reihenfolge als nummerierte Schritte mit
+// Pfeilen dazwischen (umbrechend). Schritt + folgender Pfeil bilden je eine
+// Einheit, damit ein Pfeil nie allein am Zeilenanfang steht.
+const RO_ARROW_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h15M13 6l6 6-6 6"/></svg>';
+function roFlowHtml(order, textOf) {
+  return order.map((id, i) =>
+    '<div class="ro-flow-unit" style="--i:' + i + '">' +
+      '<div class="ro-step"><span class="ro-step-nr">' + (i + 1) + '</span>' +
+      '<span class="ro-step-text">' + escapeHtml(textOf[id] || '?') + '</span></div>' +
+      (i + 1 < order.length ? '<span class="ro-arrow">' + RO_ARROW_SVG + '</span>' : '') +
+    '</div>').join('');
+}
+
 // --- Drag-to-Reorder via Pointer Events (Touch + Maus) einer einzelnen Liste --
 // Gemeinsam von Spieler-Board und Master-Selbstspiel-Board genutzt: `onChange`
 // wird mit der neuen ID-Reihenfolge aufgerufen, sobald sich per Drag etwas
@@ -112,6 +125,119 @@ function roMakeSortable(listEl, isEnabled, onChange) {
   };
 }
 
+// --- Staffel-Modus (s. lib/staffel.js): Brett + Pool ---------------------------
+// Zeichnet das Brett (gesetzte Woerter gesperrt, ein neues Wort aus dem Entwurf
+// ziehbar) und – falls poolEl gegeben – den Pool der noch freien Woerter.
+// In der Aufloesung zeigt das Brett die komplette Loesung (alles gesperrt).
+function roStaffelFill(boardEl, poolEl, ro, enabled) {
+  const st = ro.staffel;
+  const items = ro.items || [];
+  const textOf = {};
+  items.forEach((it) => { textOf[it.id] = it.text; });
+  const reveal = ro.phase === 'reveal' && ro.solution;
+  const order = reveal ? ro.solution : (st.draft || st.board);
+  const placed = new Set(st.board);
+  boardEl.innerHTML = '';
+  order.forEach((id) => {
+    const isNew = !reveal && !placed.has(id);
+    const card = roMakeCard({ id, text: textOf[id] || '?' }, isNew && enabled);
+    card.classList.add(isNew ? 'draft' : 'locked');
+    boardEl.appendChild(card);
+  });
+  if (poolEl) {
+    poolEl.innerHTML = '';
+    if (!reveal) {
+      const inBoard = new Set(order);
+      items.forEach((it) => { if (!inBoard.has(it.id)) poolEl.appendChild(roMakeCard(it, enabled)); });
+    }
+  }
+}
+
+// Drag & Drop zwischen Pool und Brett (Pointer Events, Touch + Maus). Ziehbar sind
+// nur Pool-Woerter und das eine Entwurfs-Wort; ein neu eingesetztes Wort ersetzt
+// ein bereits eingesetztes (es gibt nur EINEN Entwurf, das alte geht zurueck in den
+// Pool). onChange(ids) bekommt die neue Reihenfolge des Bretts inkl. Entwurf.
+function roStaffelDnD(boardEl, poolEl, isEnabled, onChange) {
+  boardEl.dataset.stDrop = 'board';
+  poolEl.dataset.stDrop = 'pool';
+  let drag = null;
+
+  function onDown(e) {
+    const card = e.target.closest('.ro-card.draggable');
+    if (!card || !isEnabled()) return;
+    e.preventDefault();
+    const rect = card.getBoundingClientRect();
+    const ghost = card.cloneNode(true);
+    ghost.classList.add('ro-ghost');
+    ghost.style.width = rect.width + 'px';
+    ghost.style.left = rect.left + 'px';
+    ghost.style.top = rect.top + 'px';
+    document.body.appendChild(ghost);
+    const placeholder = document.createElement('div');
+    placeholder.className = 'ro-placeholder';
+    placeholder.style.height = rect.height + 'px';
+    card.parentNode.insertBefore(placeholder, card);
+    card.style.display = 'none';
+    drag = { card, ghost, placeholder, offX: e.clientX - rect.left, offY: e.clientY - rect.top };
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+    window.addEventListener('pointercancel', onUp);
+  }
+
+  function onMove(e) {
+    if (!drag) return;
+    e.preventDefault();
+    drag.ghost.style.left = (e.clientX - drag.offX) + 'px';
+    drag.ghost.style.top = (e.clientY - drag.offY) + 'px';
+    const el = document.elementFromPoint(e.clientX, e.clientY);
+    const zone = el && el.closest('[data-st-drop]');
+    if (!zone) return;
+    if (zone.dataset.stDrop === 'pool') { poolEl.appendChild(drag.placeholder); return; }
+    // Brett: Platzhalter vor das erste Kaertchen setzen, dessen Mitte unter dem Zeiger liegt.
+    let before = null;
+    for (const c of boardEl.querySelectorAll('.ro-card')) {
+      if (c === drag.card) continue;
+      const r = c.getBoundingClientRect();
+      if (e.clientY < r.top + r.height / 2) { before = c; break; }
+    }
+    boardEl.insertBefore(drag.placeholder, before);
+  }
+
+  function onUp() {
+    if (!drag) return;
+    const { card, ghost, placeholder } = drag;
+    window.removeEventListener('pointermove', onMove);
+    window.removeEventListener('pointerup', onUp);
+    window.removeEventListener('pointercancel', onUp);
+    placeholder.parentNode.insertBefore(card, placeholder);
+    placeholder.parentNode.removeChild(placeholder);
+    card.style.display = '';
+    if (ghost.parentNode) ghost.parentNode.removeChild(ghost);
+    drag = null;
+    const toBoard = card.parentNode === boardEl;
+    card.classList.toggle('draft', toBoard);
+    // Nur ein Entwurf: ein zuvor eingesetztes anderes Wort zurueck in den Pool.
+    boardEl.querySelectorAll('.ro-card.draft').forEach((c) => {
+      if (c !== card || !toBoard) { c.classList.remove('draft'); poolEl.appendChild(c); }
+    });
+    onChange(Array.from(boardEl.querySelectorAll('.ro-card')).map((c) => c.dataset.id));
+  }
+
+  boardEl.addEventListener('pointerdown', onDown);
+  poolEl.addEventListener('pointerdown', onDown);
+  return {
+    dragging: () => !!drag,
+    destroy() {
+      boardEl.removeEventListener('pointerdown', onDown);
+      poolEl.removeEventListener('pointerdown', onDown);
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onUp);
+      if (drag && drag.ghost && drag.ghost.parentNode) drag.ghost.parentNode.removeChild(drag.ghost);
+    }
+  };
+}
+
 // --- Spieler: Liste per Drag & Drop umsortieren -------------------------------
 function createRoPlayer(root, ctx) {
   root.className = 'game-mount';
@@ -121,15 +247,24 @@ function createRoPlayer(root, ctx) {
       '<div class="ro-p-frage" data-el="frage"></div>' +
       '<div class="ro-p-hint" data-el="hint"></div>' +
       '<div class="ro-list" data-el="list"></div>' +
+      '<div class="ro-staffel hidden" data-el="staffel">' +
+        '<div class="st-banner" data-el="stbanner"></div>' +
+        '<div class="ro-list ro-st-board" data-el="stboard"></div>' +
+        '<div class="ro-st-pool" data-el="stpool"></div>' +
+        '<button class="btn btn-primary big" data-el="stsubmit">📤 Abschicken</button>' +
+      '</div>' +
       '<div class="ro-p-feedback" data-el="feedback"></div>' +
-      '<div class="ro-p-score" data-el="score"></div>' +
     '</div>';
   const titleEl = root.querySelector('[data-el="title"]');
   const frageEl = root.querySelector('[data-el="frage"]');
   const hintEl = root.querySelector('[data-el="hint"]');
   const listEl = root.querySelector('[data-el="list"]');
+  const stEl = root.querySelector('[data-el="staffel"]');
+  const stBannerEl = root.querySelector('[data-el="stbanner"]');
+  const stBoardEl = root.querySelector('[data-el="stboard"]');
+  const stPoolEl = root.querySelector('[data-el="stpool"]');
+  const stSubmitEl = root.querySelector('[data-el="stsubmit"]');
   const feedbackEl = root.querySelector('[data-el="feedback"]');
-  const scoreEl = root.querySelector('[data-el="score"]');
 
   let order = [];         // aktuelle lokale Reihenfolge (Array von ids)
   let textOf = {};
@@ -141,6 +276,35 @@ function createRoPlayer(root, ctx) {
     ctx.send({ type: 'order', order });
     updateFeedback();
   });
+
+  // Staffel-Modus: nur das aktive Team sieht Brett + Pool und zieht gemeinsam am Entwurf.
+  let stBuiltFor = '';
+  let stMyTurn = false;
+  const stDnD = roStaffelDnD(stBoardEl, stPoolEl, () => stMyTurn, (ids) => ctx.send({ type: 'order', order: ids }));
+  stSubmitEl.addEventListener('click', () => ctx.send({ type: 'staffelSubmit' }));
+
+  function renderStaffel(s, ro) {
+    const st = ro.staffel;
+    const reveal = ro.phase === 'reveal';
+    const isActive = !!s.game.staffelMyTurn;                         // gehoert zur aktiven Einheit
+    stMyTurn = !reveal && isActive && st.status === 'working' && !s.game.locked;   // darf gerade ziehen
+    stBannerEl.innerHTML = reveal ? '🏁 Alle Wörter sind gesetzt!' : staffelBannerHtml(st, stMyTurn);
+    // Nur wer dran ist (und in der Aufloesung alle) sieht die Aufgabe.
+    const show = reveal || isActive;
+    stBoardEl.classList.toggle('hidden', !show);
+    stPoolEl.classList.toggle('hidden', !show || reveal);
+    frageEl.classList.toggle('hidden', !show);
+    stSubmitEl.classList.toggle('hidden', !stMyTurn);
+    stSubmitEl.disabled = !st.draft;
+    hintEl.textContent = '';
+    feedbackEl.textContent = '';
+    const sig = [ro.phase, st.board.join(','), (st.draft || []).join(','), st.status, stMyTurn ? 1 : 0, show ? 1 : 0,
+      (ro.items || []).map((it) => it.id).join(',')].join('|');
+    if (sig !== stBuiltFor && !stDnD.dragging()) {
+      stBuiltFor = sig;
+      if (show) roStaffelFill(stBoardEl, stPoolEl, ro, stMyTurn);
+    }
+  }
 
   function updateFeedback() {
     const s = ctx.state();
@@ -157,21 +321,23 @@ function createRoPlayer(root, ctx) {
     if (!ro) return;
     titleEl.textContent = ro.intro || '';
     titleEl.classList.toggle('hidden', !ro.intro);
-    const pts = s.game.scores[ctx.clientId()] || 0;
-    scoreEl.textContent = pts > 0 ? 'Deine Punkte: ' + pts : '';
 
     if (ro.phase !== 'question' && ro.phase !== 'reveal') {
-      builtFor = '';
+      builtFor = ''; stBuiltFor = '';
       listEl.classList.add('hidden');
+      stEl.classList.add('hidden');
       frageEl.textContent = '';
-      hintEl.textContent = 'Warte auf den Start …';
-      feedbackEl.textContent = '';
       feedbackEl.className = 'ro-p-feedback';
+      feedbackEl.textContent = '';
+      hintEl.textContent = ro.phase === 'done' ? '🏁 Alle Fragen geschafft!' : 'Warte auf den Start …';
       return;
     }
-    listEl.classList.remove('hidden');
+    listEl.classList.toggle('hidden', !!ro.staffel);
+    stEl.classList.toggle('hidden', !ro.staffel);
     frageEl.textContent = ro.frage || '';
+    frageEl.classList.remove('hidden');
     locked = !!s.game.locked;
+    if (ro.staffel) { feedbackEl.className = 'ro-p-feedback'; renderStaffel(s, ro); return; }
     const items = ro.items || [];
     textOf = {};
     items.forEach((it) => { textOf[it.id] = it.text; });
@@ -181,10 +347,21 @@ function createRoPlayer(root, ctx) {
       const mine = s.game.roMyAnswer;
       order = (Array.isArray(mine) && mine.length === items.length) ? mine.slice() : items.map((it) => it.id);
       const marks = {};
-      if (ro.phase === 'reveal' && ro.solution) {
+      const reveal = ro.phase === 'reveal' && ro.solution;
+      if (reveal) {
         order.forEach((id, i) => { marks[id] = (ro.solution[i] === id) ? 'correct' : 'wrong'; });
       }
       roFillList(listEl, order, textOf, ro.phase === 'question' && !locked, marks);
+      // Aufloesung: neutrale Karten mit ✓ bzw. dem richtigen Platz statt der Akzent-Kaertchen.
+      listEl.classList.toggle('ro-reveal', !!reveal);
+      if (reveal) {
+        listEl.querySelectorAll('.ro-card').forEach((card) => {
+          const pos = document.createElement('span');
+          pos.className = 'ro-pos';
+          pos.textContent = card.classList.contains('correct') ? '✓' : '→ ' + (ro.solution.indexOf(card.dataset.id) + 1);
+          card.appendChild(pos);
+        });
+      }
       builtFor = sig;
     }
 
@@ -202,17 +379,16 @@ function createRoPlayer(root, ctx) {
       }
       hintEl.textContent = 'Auflösung – deine Reihenfolge mit Markierung.';
       const mine = (s.game.roMyAnswer || []).join(',');
-      const result = (ro.results || []).find((r) => r.id === ctx.clientId());
       feedbackEl.className = 'ro-p-feedback ' + (exact ? 'good' : (correctPairs > 0 ? '' : 'false'));
       feedbackEl.textContent = exact
-        ? ('Perfekt!  ·  +' + (result ? result.pts : 0))
-        : (correctPairs + ' richtige Paare  ·  +' + (result ? result.pts : 0));
+        ? 'Perfekt!'
+        : (correctPairs + ' richtige Paare');
     }
   }
 
   return {
     update,
-    destroy() { sortable.destroy(); }
+    destroy() { sortable.destroy(); stDnD.destroy(); }
   };
 }
 
@@ -223,16 +399,31 @@ function createRoScreen(root, ctx) {
       '<div class="ro-s-title" data-el="title"></div>' +
       '<div class="ro-s-frage" data-el="frage"></div>' +
       '<div class="ro-s-list" data-el="list"></div>' +
+      '<div class="ro-s-staffel hidden" data-el="staffel">' +
+        '<div class="st-banner st-s-banner" data-el="stbanner"></div>' +
+        '<div class="ro-list ro-s-list" data-el="stboard"></div>' +
+        '<div class="ro-st-pool ro-s-pool" data-el="stpool"></div>' +
+      '</div>' +
+      '<div class="ro-s-reveal hidden" data-el="reveal">' +
+        '<div class="ro-flow" data-el="flow"></div>' +
+      '</div>' +
       '<div class="ro-s-status" data-el="status"></div>' +
       '<div class="ro-s-live" data-el="live"></div>' +
-      '<div class="mc-final" data-el="final">' +
-        '<div class="mc-final-title">🏁 Endstand</div>' +
-        '<div class="leaderboard"></div>' +
+      '<div class="mc-final ro-s-final hidden" data-el="final">' +
+        '<div class="mc-final-title">🏁 Quiz beendet</div>' +
       '</div>' +
     '</div>';
+  const screenEl = root.querySelector('.ro-screen');
+  const revealEl = root.querySelector('[data-el="reveal"]');
+  const flowEl = root.querySelector('[data-el="flow"]');
+  let flowSig = '';
   const titleEl = root.querySelector('[data-el="title"]');
   const frageEl = root.querySelector('[data-el="frage"]');
   const listEl = root.querySelector('[data-el="list"]');
+  const stEl = root.querySelector('[data-el="staffel"]');
+  const stBannerEl = root.querySelector('[data-el="stbanner"]');
+  const stBoardEl = root.querySelector('[data-el="stboard"]');
+  const stPoolEl = root.querySelector('[data-el="stpool"]');
   const statusEl = root.querySelector('[data-el="status"]');
   const liveEl = root.querySelector('[data-el="live"]');
   const finalEl = root.querySelector('[data-el="final"]');
@@ -241,37 +432,56 @@ function createRoScreen(root, ctx) {
     const ro = s.game.ro;
     if (!ro) return;
     titleEl.textContent = ro.intro || 'Reihenfolge-Quiz';
+    // Staffel-Modus: waehrend der Frage Brett + Pool (read-only) statt Liste; in der
+    // Aufloesung normal (Loesung + Bestenliste).
+    const staffelLive = !!ro.staffel && ro.phase === 'question';
+    stEl.classList.toggle('hidden', !staffelLive);
+    if (staffelLive) {
+      stBannerEl.innerHTML = staffelBannerHtml(ro.staffel, false);
+      roStaffelFill(stBoardEl, stPoolEl, ro, false);
+    }
 
-    if (ro.phase !== 'question' && ro.phase !== 'reveal') {
-      listEl.classList.add('hidden'); frageEl.classList.add('hidden'); finalEl.classList.add('hidden');
+    const reveal = ro.phase === 'reveal';
+    // Aufloesung + Ende bekommen die volle Breite.
+    screenEl.classList.toggle('wide', reveal || ro.phase === 'done');
+    revealEl.classList.toggle('hidden', !reveal);
+    finalEl.classList.toggle('hidden', ro.phase !== 'done');
+    if (!reveal) flowSig = '';
+
+    // Quiz beendet (nach der letzten Frage): Punkte zeigt das Scoreboard.
+    if (ro.phase === 'done') {
+      listEl.classList.add('hidden'); frageEl.classList.add('hidden'); statusEl.classList.add('hidden');
+      liveEl.classList.add('hidden'); liveEl.innerHTML = '';
+      return;
+    }
+
+    if (ro.phase !== 'question' && !reveal) {
+      listEl.classList.add('hidden'); frageEl.classList.add('hidden');
       liveEl.classList.add('hidden'); liveEl.innerHTML = '';
       statusEl.classList.remove('hidden');
       statusEl.textContent = ro.total ? ('Gleich geht’s los … (' + ro.total + ' Frage' + (ro.total === 1 ? '' : 'n') + ')') : 'Keine Fragen im Profil';
       return;
     }
 
-    statusEl.classList.remove('hidden');
     frageEl.classList.remove('hidden');
     frageEl.textContent = ro.frage || '';
     const items = ro.items || [];
     const textOf = {};
     items.forEach((it) => { textOf[it.id] = it.text; });
-    const reveal = ro.phase === 'reveal';
-    const masterOnly = !!(s.settings && s.settings.masterOnlyMode);
+    const masterOnly = !!(s.settings && s.settings.masterOnlyMode) && !ro.staffel;
 
-    listEl.classList.toggle('hidden', masterOnly && !reveal);
-    if (!(masterOnly && !reveal)) {
-      const order = reveal ? ro.solution : items.map((it) => it.id);
-      roFillList(listEl, order, textOf, false, null);
-    }
+    // Fragephase: Referenzliste (ausser Nur-Master/Staffel); Aufloesung: Pfeil-Ablauf.
+    listEl.classList.toggle('hidden', reveal || masterOnly || staffelLive);
+    if (!reveal && !masterOnly && !staffelLive) roFillList(listEl, items.map((it) => it.id), textOf, false, null);
 
     if (reveal) {
-      statusEl.textContent = '';
-      finalEl.classList.remove('hidden');
-      renderLeaderboard(finalEl, s);
+      statusEl.classList.add('hidden');
+      // Nur bei Aenderung neu bauen, sonst starten die Einblend-Animationen bei jedem Snapshot neu.
+      const sig = (ro.solution || []).map((id) => id + ':' + textOf[id]).join('|');
+      if (sig !== flowSig) { flowSig = sig; flowEl.innerHTML = roFlowHtml(ro.solution || [], textOf); }
     } else {
-      finalEl.classList.add('hidden');
-      statusEl.textContent = masterOnly ? '🎯 Der Master sortiert …' : '📱 Sortiere am Handy!';
+      statusEl.classList.remove('hidden');
+      statusEl.textContent = staffelLive ? '' : (masterOnly ? '🎯 Der Master sortiert …' : '📱 Sortiere am Handy!');
     }
 
     // Nur-Master-Modus: statt der reinen Referenzliste zeigt der Bildschirm live
@@ -307,6 +517,10 @@ function createRoMaster(root, ctx) {
       '</div>' +
       '<p class="muted small" data-el="hint"></p>' +
     '</section>' +
+    '<section class="panel hidden" data-el="stsec">' +
+      '<h3>Staffel</h3>' +
+      '<div data-el="stpanel"></div>' +
+    '</section>' +
     '<section class="panel">' +
       '<h3>Richtige Reihenfolge</h3>' +
       '<div class="ro-m-solution" data-el="solution"></div>' +
@@ -316,11 +530,17 @@ function createRoMaster(root, ctx) {
       '<p class="muted small">Ziehen wie am Spieler-Handy – ohne Teilnehmerbindung, keine Punktevergabe, live auf dem Bildschirm sichtbar.</p>' +
       '<div data-el="selfplay"></div>' +
     '</section>' +
-    '<section class="panel">' +
+    '<section class="panel" data-el="answersec">' +
       '<h3>Antworten (<span data-el="acount">0</span>)</h3>' +
       '<div class="mc-m-players" data-el="players"></div>' +
     '</section>';
 
+  const stSecEl = root.querySelector('[data-el="stsec"]');
+  const answerSecEl = root.querySelector('[data-el="answersec"]');
+  const stPanel = createStaffelMasterPanel(root.querySelector('[data-el="stpanel"]'), ctx);
+  const stBoardEl = document.createElement('div');
+  stBoardEl.className = 'ro-list ro-st-board';
+  stPanel.previewEl.appendChild(stBoardEl);
   const phaseEl = root.querySelector('[data-el="phase"]');
   const hintEl = root.querySelector('[data-el="hint"]');
   const solutionEl = root.querySelector('[data-el="solution"]');
@@ -342,9 +562,33 @@ function createRoMaster(root, ctx) {
       // Weiter vor dem Auflösen = Frage ohne Punkte überspringen → Rückfrage
       if (b.dataset.act === 'roNext' && (ctx.state().game.ro || {}).phase === 'question' &&
           !(await confirmModal('Die Frage ist noch nicht aufgelöst. Wirklich überspringen?', { title: 'Weiter', okText: 'Überspringen' }))) return;
+      if (b.dataset.act === 'roReveal') {
+        const warn = revealWarning(ctx.state());
+        if (warn && !(await confirmModal(warn, { title: 'Auflösen', okText: 'Trotzdem auflösen' }))) return;
+      }
       ctx.send({ type: 'master', action: b.dataset.act });
     });
   });
+
+  // Rueckfrage vor dem Aufloesen, solange die Frage noch nicht "fertig" ist:
+  // Staffel = noch Woerter im Pool (Abbruch ohne Punkte), sonst = nicht alle
+  // online Spieler haben sortiert. Nur-Master-Modus ohne Spielerantworten: keine.
+  function revealWarning(s) {
+    const ro = (s && s.game.ro) || {};
+    if (ro.phase !== 'question') return '';
+    if (ro.staffel) {
+      const open = (ro.items || []).length - ro.staffel.board.length;
+      return open > 0 ? 'Es ' + (open === 1 ? 'ist noch 1 Wort' : 'sind noch ' + open + ' Wörter') +
+        ' nicht gesetzt. Auflösen bricht die Staffel-Frage ohne weitere Punkte ab.' : '';
+    }
+    if (s.settings && s.settings.masterOnlyMode) return '';
+    const online = (s.participants || []).filter((p) => p.role === 'player' && p.online);
+    const answers = s.game.roAnswers || {};
+    const missing = online.filter((p) => !answers[p.id]).length;
+    if (!missing) return '';
+    return (online.length - missing) + ' von ' + online.length + ' Spielern haben sortiert' +
+      ' (' + missing + ' noch nicht). Wer nichts verschoben hat, bekommt keine Punkte. Trotzdem auflösen?';
+  }
 
   function update(s) {
     const ro = s.game.ro || { phase: 'lobby', total: 0 };
@@ -357,15 +601,30 @@ function createRoMaster(root, ctx) {
     startBtn.disabled = !(phase === 'lobby') || total === 0;
     revealBtn.disabled = phase !== 'question';
     nextBtn.disabled = !(phase === 'question' || phase === 'reveal');
+    nextBtn.textContent = (phase === 'reveal' && ro.number >= ro.total) ? '🏁 Beenden' : '⏭ Weiter';
+
+    const stMode = !!ro.staffel;
+    const cfgStaffel = !!(cfg && cfg.modus === 'staffel');
+    // Staffel: Panel mit Wer-ist-dran, Hinweis und Richtig/Falsch statt Antwortliste/Selbstspiel.
+    stSecEl.classList.toggle('hidden', !stMode);
+    answerSecEl.classList.toggle('hidden', stMode);
+    if (stMode) {
+      stPanel.update(s, ro.staffel);
+      roStaffelFill(stBoardEl, null, ro, false);
+    }
 
     if (total === 0) {
       hintEl.textContent = 'Keine Fragen in diesem Profil. Lege sie im Tab „🎲 Spiele" → „⚙️ Konfigurieren" an.';
     } else if (phase === 'lobby') {
-      hintEl.textContent = total + ' Frage' + (total === 1 ? '' : 'n') + ' bereit · bis zu ' + (cfg ? cfg.punkte : '?') + ' Punkte je Frage.';
+      hintEl.textContent = total + ' Frage' + (total === 1 ? '' : 'n') + ' bereit · ' +
+        (cfgStaffel ? 'Staffel-Modus: ' + (cfg ? cfg.punkte : '?') + ' Punkte je richtigem Zug (im Team geteilt).'
+                    : 'bis zu ' + (cfg ? cfg.punkte : '?') + ' Punkte je Frage.');
+    } else if (phase === 'question' && stMode) {
+      hintEl.textContent = 'Das aktive Team setzt je Zug ein Wort. Unten bewerten; „Auflösen" bricht die Frage ohne Punkte ab.';
     } else if (phase === 'question') {
       hintEl.textContent = 'Spieler sortieren am Handy. „Auflösen" wertet und vergibt Punkte.';
     } else if (phase === 'reveal') {
-      hintEl.textContent = '„Weiter" zeigt die nächste Frage bzw. den Endstand.';
+      hintEl.textContent = '„Weiter" zeigt die nächste Frage bzw. beendet das Quiz.';
     } else {
       hintEl.textContent = 'Alle Fragen durch. „Zurücksetzen" für eine neue Runde.';
     }
@@ -405,6 +664,9 @@ function createRoMaster(root, ctx) {
     const players = (s.participants || []).filter((p) => p.role === 'player');
     const answers = s.game.roAnswers || {};
     const solution = s.game.roSolution || [];
+    // Punkte dieser Frage je Spieler (nur in der Aufloesung, Staffel hat keine Rundenergebnisse).
+    const ptsOf = {};
+    (ro.results || []).forEach((r) => { ptsOf[r.id] = r.pts; });
     acountEl.textContent = Object.keys(answers).length + (players.length ? ' / ' + players.length : '');
     playersEl.innerHTML = '';
     players.forEach((p) => {
@@ -426,12 +688,13 @@ function createRoMaster(root, ctx) {
         '<span class="dev-dot' + (p.online ? ' online' : '') + '"><span class="led"></span></span>' +
         avatarChip(p) +
         '<span class="mc-m-pname">' + escapeHtml(p.name) + '</span>' +
-        '<span class="zu-m-pstat">' + info + '</span>';
+        '<span class="zu-m-pstat">' + info + '</span>' +
+        (phase === 'reveal' && submitted ? '<span class="zd-m-pts">+' + (ptsOf[p.id] || 0) + '</span>' : '');
       playersEl.appendChild(row);
     });
     if (players.length === 0) playersEl.innerHTML = '<p class="muted small">Noch keine Spieler verbunden.</p>';
 
-    const masterOnly = !!(s.settings && s.settings.masterOnlyMode);
+    const masterOnly = !!(s.settings && s.settings.masterOnlyMode) && !stMode && !cfgStaffel;   // Staffel hat keinen Nur-Master-Modus
     selfplaySecEl.classList.toggle('hidden', !masterOnly);
     if (masterOnly) selfplay.update(s);
   }

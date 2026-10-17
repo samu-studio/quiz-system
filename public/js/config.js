@@ -779,7 +779,8 @@ function gatherPlaylistSteps() {
   if (!cont) return [];
   return Array.from(cont.querySelectorAll('.pl-step-row')).map((row) => ({
     game: row.querySelector('.pl-game').value,
-    profile: row.querySelector('.pl-profile').value
+    profile: row.querySelector('.pl-profile').value,
+    note: row._plNote || ''
   }));
 }
 
@@ -808,6 +809,7 @@ function renderPlaylistEditor() {
   pl.steps.forEach((step, i) => {
     const row = document.createElement('div');
     row.className = 'pl-step-row';
+    row._plNote = step.note || '';   // Notiz haengt am Row-Element (gatherPlaylistSteps)
 
     const num = document.createElement('span');
     num.className = 'pl-step-num';
@@ -845,9 +847,22 @@ function renderPlaylistEditor() {
     profSel.addEventListener('change', () => sendPlaylist(gatherPlaylistSteps()));
     row.appendChild(profSel);
 
-    // Umsortieren + Loeschen
+    // Notiz + Umsortieren + Loeschen
     const ctrls = document.createElement('div');
     ctrls.className = 'pl-step-ctrls';
+    const noteBtn = document.createElement('button');
+    noteBtn.className = 'btn btn-ghost small pl-note-btn' + (step.note ? ' has-note' : '');
+    noteBtn.textContent = '📝';
+    noteBtn.title = step.note ? ('Notiz: ' + step.note) : 'Notiz hinzufügen';
+    noteBtn.addEventListener('click', async () => {
+      const info = playlistStepLabel(step);
+      const text = await noteModal('Notiz · Schritt ' + (i + 1) + ' (' + info.name + ')', row._plNote);
+      if (text === null) return;
+      const steps = gatherPlaylistSteps();
+      if (steps[i]) steps[i].note = text;
+      sendPlaylist(steps);
+    });
+    ctrls.appendChild(noteBtn);
     const up = document.createElement('button');
     up.className = 'btn btn-ghost small'; up.textContent = '▲'; up.title = 'Nach oben';
     up.disabled = i === 0;

@@ -33,8 +33,7 @@ function createSqScreen(root, ctx) {
       '<div class="mc-answered" data-el="answered"></div>' +
       '<div class="sq-results" data-el="results"></div>' +
       '<div class="mc-final" data-el="final">' +
-        '<div class="mc-final-title">🏁 Endstand</div>' +
-        '<div class="leaderboard"></div>' +
+        '<div class="mc-final-title">🏁 Quiz beendet</div>' +
       '</div>' +
     '</div>';
   const introEl = root.querySelector('[data-el="intro"]');
@@ -55,7 +54,6 @@ function createSqScreen(root, ctx) {
       answeredEl.classList.add('hidden'); resultsEl.classList.add('hidden');
       counterEl.textContent = sq.total + ' Fragen';
       finalEl.classList.remove('hidden');
-      renderLeaderboard(finalEl, s);
       return;
     }
     finalEl.classList.add('hidden');
@@ -115,13 +113,11 @@ function createSqPlayer(root, ctx) {
       '<div class="mc-p-question" data-el="question"></div>' +
       '<div class="sq-input" data-el="input"></div>' +
       '<div class="mc-p-feedback" data-el="feedback"></div>' +
-      '<div class="mc-p-score" data-el="score"></div>' +
     '</div>';
   const counterEl = root.querySelector('[data-el="counter"]');
   const qEl = root.querySelector('[data-el="question"]');
   const inputEl = root.querySelector('[data-el="input"]');
   const fbEl = root.querySelector('[data-el="feedback"]');
-  const scoreEl = root.querySelector('[data-el="score"]');
 
   let sig = null;          // Signatur des aktuellen Eingabe-DOM (Frage/Phase/Grenzen)
   let sendTimer = 0;
@@ -189,7 +185,7 @@ function createSqPlayer(root, ctx) {
     }
   }
 
-  // Auflösungs-Ansicht: eigene Schätzung / tatsächlich / Abweichung + Punkte.
+  // Auflösungs-Ansicht: eigene Schätzung / tatsächlich / Abweichung.
   function renderReveal(sq, myAnswer) {
     inputEl.innerHTML = '';
     const unit = sq.einheit || '';
@@ -206,16 +202,14 @@ function createSqPlayer(root, ctx) {
 
     fbEl.className = 'mc-p-feedback';
     if (!Number.isFinite(myAnswer)) { fbEl.textContent = 'Keine Schätzung abgegeben'; fbEl.classList.add('miss'); }
-    else if (myResult && myResult.pts > 0) { fbEl.textContent = '✓ +' + myResult.pts + ' Punkte'; fbEl.classList.add('good'); }
-    else { fbEl.textContent = 'Diesmal keine Punkte'; fbEl.classList.add('miss'); }
+    else if (myResult && myResult.pts > 0) { fbEl.textContent = '✓ Gut geschätzt!'; fbEl.classList.add('good'); }
+    else { fbEl.textContent = 'Diesmal leider daneben'; fbEl.classList.add('miss'); }
   }
 
   function update(s) {
     const sq = s.game.sq;
     if (!sq) return;
     const myAnswer = Number.isFinite(s.game.sqMyAnswer) ? s.game.sqMyAnswer : null;
-    const pts = s.game.scores[ctx.clientId()] || 0;
-    scoreEl.textContent = pts > 0 ? 'Deine Punkte: ' + pts : '';
 
     if (sq.phase === 'lobby') {
       sig = null; touched = false;
@@ -230,7 +224,7 @@ function createSqPlayer(root, ctx) {
       qEl.textContent = '🏁 Geschafft!';
       inputEl.innerHTML = '';
       fbEl.className = 'mc-p-feedback';
-      fbEl.textContent = pts > 0 ? 'Du hast ' + pts + ' Punkte geholt.' : '';
+      fbEl.textContent = '';
       return;
     }
 
@@ -288,7 +282,7 @@ function createSqMaster(root, ctx) {
   const startBtn = root.querySelector('[data-act="sqStart"]');
   const revealBtn = root.querySelector('[data-act="sqReveal"]');
   const nextBtn = root.querySelector('[data-act="sqNext"]');
-  const PHASE_LABEL = { lobby: '⚪ Bereit', question: '❓ Frage läuft', reveal: '💡 Aufgelöst', done: '🏁 Endstand' };
+  const PHASE_LABEL = { lobby: '⚪ Bereit', question: '❓ Frage läuft', reveal: '💡 Aufgelöst', done: '🏁 Beendet' };
 
   root.querySelectorAll('[data-act]').forEach((b) => {
     b.addEventListener('click', async () => {
@@ -324,7 +318,7 @@ function createSqMaster(root, ctx) {
     } else if (phase === 'question') {
       hintEl.textContent = 'Spieler schätzen – die Zahl ist bis zum Auflösen änderbar. „Auflösen" vergibt die Punkte.';
     } else if (phase === 'reveal') {
-      hintEl.textContent = sq.number >= sq.total ? 'Letzte Frage – „Weiter" zeigt den Endstand.' : '„Weiter" für die nächste Frage.';
+      hintEl.textContent = sq.number >= sq.total ? 'Letzte Frage – „Weiter" beendet das Quiz.' : '„Weiter" für die nächste Frage.';
     } else {
       hintEl.textContent = 'Quiz beendet. „Zurücksetzen" für einen neuen Durchlauf.';
     }

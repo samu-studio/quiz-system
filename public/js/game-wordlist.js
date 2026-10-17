@@ -52,7 +52,6 @@ function createWordlistPlayer(root, ctx) {
       '</form>' +
       '<div class="wl-last" data-el="last"></div>' +
       '<div class="wl-player-progress" data-el="progress"></div>' +
-      '<div class="player-score" data-el="score"></div>' +
     '</div>';
   const form = root.querySelector('[data-el="form"]');
   const input = root.querySelector('[data-el="input"]');
@@ -60,7 +59,6 @@ function createWordlistPlayer(root, ctx) {
   const statusEl = root.querySelector('[data-el="status"]');
   const lastEl = root.querySelector('[data-el="last"]');
   const progressEl = root.querySelector('[data-el="progress"]');
-  const scoreEl = root.querySelector('[data-el="score"]');
   let lastSent = '';
 
   const onSubmit = (e) => {
@@ -94,8 +92,6 @@ function createWordlistPlayer(root, ctx) {
     lastEl.textContent = lastSent ? 'Zuletzt gesendet: ' + lastSent : '';
     // Fortschritt (nur Zahlen, keine Woerter) als Motivation.
     progressEl.textContent = wl ? (wl.revealedCount + ' / ' + wl.total + ' aufgedeckt') : '';
-    const pts = s.game.scores[ctx.clientId()] || 0;
-    scoreEl.textContent = pts > 0 ? 'Deine Punkte: ' + pts : '';
   }
 
   return { update, destroy() { form.removeEventListener('submit', onSubmit); } };

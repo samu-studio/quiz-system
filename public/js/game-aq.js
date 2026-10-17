@@ -60,8 +60,7 @@ function createAqScreen(root, ctx) {
       '<div class="dq-solution" data-el="solution"></div>' +
       '<div class="dq-status" data-el="status"></div>' +
       '<div class="mc-final" data-el="final">' +
-        '<div class="mc-final-title">🏁 Endstand</div>' +
-        '<div class="leaderboard"></div>' +
+        '<div class="mc-final-title">🏁 Quiz beendet</div>' +
       '</div>' +
       '<button class="aq-activate" data-el="activate" type="button">🔊 Ton aktivieren</button>' +
     '</div>';
@@ -193,7 +192,6 @@ function createAqScreen(root, ctx) {
       solutionEl.classList.add('hidden'); statusEl.classList.add('hidden');
       counterEl.textContent = aq.total + ' Runden';
       finalEl.classList.remove('hidden');
-      renderLeaderboard(finalEl, s);
       return;
     }
     finalEl.classList.add('hidden');
@@ -289,7 +287,6 @@ function createAqPlayer(root, ctx) {
       '</form>' +
       '<button class="fw-buzzer dq-buzzer hidden" data-el="buzzer" type="button">BUZZ!</button>' +
       '<div class="mc-p-feedback dq-p-feedback" data-el="feedback"></div>' +
-      '<div class="mc-p-score" data-el="score"></div>' +
     '</div>';
   const counterEl = root.querySelector('[data-el="counter"]');
   const pointsEl = root.querySelector('[data-el="points"]');
@@ -298,7 +295,6 @@ function createAqPlayer(root, ctx) {
   const input = root.querySelector('[data-el="input"]');
   const buzzer = root.querySelector('[data-el="buzzer"]');
   const fbEl = root.querySelector('[data-el="feedback"]');
-  const scoreEl = root.querySelector('[data-el="score"]');
   let startTime = 0;      // lokaler Rundenbeginn (performance.now) fuer Buzzer-Zeitmessung
   let qNum = -1;
 
@@ -333,8 +329,6 @@ function createAqPlayer(root, ctx) {
   function update(s) {
     const aq = s.game.aq;
     if (!aq) return;
-    const pts = s.game.scores[ctx.clientId()] || 0;
-    scoreEl.textContent = pts > 0 ? 'Deine Punkte: ' + pts : '';
     const buzzMode = !!aq.buzzerModus;
 
     // Rundenwechsel -> lokalen Zeitstempel setzen
@@ -347,7 +341,7 @@ function createAqPlayer(root, ctx) {
       snippetEl.textContent = '';
       form.classList.add('hidden'); buzzer.classList.add('hidden');
       fbEl.className = 'mc-p-feedback dq-p-feedback';
-      if (aq.phase === 'done') fbEl.textContent = pts > 0 ? 'Du hast ' + pts + ' Punkte geholt.' : 'Geschafft!';
+      if (aq.phase === 'done') fbEl.textContent = 'Geschafft!';
       else fbEl.textContent = 'Warte auf den Start …';
       return;
     }
@@ -361,14 +355,13 @@ function createAqPlayer(root, ctx) {
       ? '🔊 Ganzer Clip'
       : ('🔊 Ausschnitt ' + aq.revealed + ' / ' + aq.stufenCount + ' · ' + aqRangeLabel(aq.snippetVon, aq.snippetSec));
 
-    // Punktwert (aktuell erreichbar bzw. bei Auflösung die Lösung)
+    // Bei Auflösung die Lösung (Punkte zeigt nur der Bildschirm)
     pointsEl.className = 'dq-p-points';
     if (reveal) {
       pointsEl.textContent = aq.loesung || '–';
       pointsEl.classList.add('solution');
     } else {
-      pointsEl.textContent = aq.pointsNow;
-      pointsEl.classList.toggle('low', aq.pointsNow <= aq.minPunkte);
+      pointsEl.textContent = '';
     }
 
     // Eingabe- bzw. Buzzer-Bereich je nach Modus
@@ -382,7 +375,7 @@ function createAqPlayer(root, ctx) {
       buzzer.className = 'fw-buzzer dq-buzzer';
       if (reveal) {
         buzzer.classList.add('idle'); buzzer.disabled = true;
-        if (aq.winner && aq.winner.id === ctx.clientId()) { buzzer.classList.remove('idle'); buzzer.classList.add('hit'); fbEl.textContent = '✓ Erwischt! +' + aq.winner.points; }
+        if (aq.winner && aq.winner.id === ctx.clientId()) { buzzer.classList.remove('idle'); buzzer.classList.add('hit'); fbEl.textContent = '✓ Erwischt!'; }
         else if (aq.winner && aq.winner.name) fbEl.textContent = '🏆 ' + (aq.winner.avatar ? aq.winner.avatar + ' ' : '') + aq.winner.name + ' hatte es!';
         else fbEl.textContent = 'Aufgelöst.';
       } else if (myPos > 0) {
@@ -404,7 +397,7 @@ function createAqPlayer(root, ctx) {
       const myGuess = s.game.aqMyGuess || null;
       if (reveal) {
         form.classList.add('hidden');
-        if (aq.winner && aq.winner.id === ctx.clientId()) fbEl.textContent = '✓ Richtig! +' + aq.winner.points;
+        if (aq.winner && aq.winner.id === ctx.clientId()) fbEl.textContent = '✓ Richtig!';
         else if (aq.winner && aq.winner.name) fbEl.textContent = '🏆 ' + (aq.winner.avatar ? aq.winner.avatar + ' ' : '') + aq.winner.name + ' war schneller.';
         else fbEl.textContent = 'Aufgelöst.';
       } else {
@@ -471,7 +464,7 @@ function createAqMaster(root, ctx) {
   const nextBtn = root.querySelector('[data-act="aqNext"]');
   const volEl = root.querySelector('[data-el="vol"]');
   const volValEl = root.querySelector('[data-el="volval"]');
-  const PHASE_LABEL = { lobby: '⚪ Bereit', running: '🔊 Runde läuft', reveal: '💡 Aufgelöst', done: '🏁 Endstand' };
+  const PHASE_LABEL = { lobby: '⚪ Bereit', running: '🔊 Runde läuft', reveal: '💡 Aufgelöst', done: '🏁 Beendet' };
 
   // Lautstärke-Regler: sendet den Wert (0..1) an den Server, der ihn an den
   // Bildschirm broadcastet. Label live mitziehen.
@@ -510,7 +503,7 @@ function createAqMaster(root, ctx) {
       ? (totalC + ' Runden') : (aq.number + '/' + aq.total);
 
     const isLast = aq.number >= aq.total;
-    nextBtn.textContent = (phase === 'reveal' && isLast) ? '🏁 Endstand' : '⏭ Nächste Runde';
+    nextBtn.textContent = (phase === 'reveal' && isLast) ? '🏁 Beenden' : '⏭ Nächste Runde';
 
     startBtn.disabled = !(phase === 'lobby') || totalC === 0;
     clueBtn.disabled = !(phase === 'running') || !!aq.buzz || (aq.revealed >= aq.stufenCount);
@@ -533,7 +526,7 @@ function createAqMaster(root, ctx) {
           ? 'Spieler buzzern. „Längerer Ausschnitt" senkt die Punkte.'
           : 'Spieler tippen. „Längerer Ausschnitt" senkt die Punkte. „Richtig" bei einem Spieler beendet die Runde.');
     } else if (phase === 'reveal') {
-      hintEl.textContent = isLast ? 'Letzte Runde – „Endstand" zeigt die Gesamtwertung.' : '„Nächste Runde" geht weiter.';
+      hintEl.textContent = isLast ? 'Letzte Runde – „Beenden" schließt das Quiz ab.' : '„Nächste Runde" geht weiter.';
     } else {
       hintEl.textContent = 'Quiz beendet. „Zurücksetzen" für einen neuen Durchlauf.';
     }

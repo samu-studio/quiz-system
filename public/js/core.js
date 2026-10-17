@@ -79,6 +79,41 @@ function confirmModal(message, opts) {
   });
 }
 
+// --- Notiz-Dialog (mehrzeiliger Text) -------------------------------------
+// Promise<string|null>: neuer Text bei „Speichern", null bei Abbrechen/Esc/Hintergrund.
+// Enter erzeugt eine neue Zeile, Strg/Cmd+Enter speichert.
+function noteModal(title, text) {
+  const overlay = $('note-overlay');
+  const okBtn = $('note-ok');
+  const cancelBtn = $('note-cancel');
+  const area = $('note-text');
+  $('note-title').textContent = title || 'Notiz';
+  area.value = text || '';
+  overlay.classList.remove('hidden');
+  area.focus();
+  return new Promise((resolve) => {
+    function cleanup(result) {
+      overlay.classList.add('hidden');
+      okBtn.removeEventListener('click', onOk);
+      cancelBtn.removeEventListener('click', onCancel);
+      overlay.removeEventListener('click', onBackdrop);
+      document.removeEventListener('keydown', onKey);
+      resolve(result);
+    }
+    function onOk() { cleanup(area.value); }
+    function onCancel() { cleanup(null); }
+    function onBackdrop(e) { if (e.target === overlay) cleanup(null); }
+    function onKey(e) {
+      if (e.key === 'Escape') { e.preventDefault(); cleanup(null); }
+      else if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); cleanup(area.value); }
+    }
+    okBtn.addEventListener('click', onOk);
+    cancelBtn.addEventListener('click', onCancel);
+    overlay.addEventListener('click', onBackdrop);
+    document.addEventListener('keydown', onKey);
+  });
+}
+
 // Avatar/Farbe-Presets fuer das Ausklappmenue der Spieler-Kopfzeile – muessen mit
 // PLAYER_AVATARS/PLAYER_COLORS in lib/state.js uebereinstimmen (der Server
 // validiert setAvatar/setColor gegen genau diese Whitelist).
@@ -1420,6 +1455,12 @@ function renderPlaylistRunbar(s) {
   carousel.classList.toggle('faded', n > rows);   // Fade nur bei echtem Overflow (>5)
   track.style.transform = 'translateY(calc(' + (-top) + ' * var(--pl-row-h)))';
 
+  // Notiz des aktiven (vor dem Start: ersten) Schritts unter den Buttons.
+  const noteEl = $('pl-run-note');
+  const note = (steps[centerIdx] && steps[centerIdx].note) || '';
+  noteEl.classList.toggle('hidden', !note);
+  noteEl.textContent = note ? ('📝 ' + note) : '';
+
   track.innerHTML = '';
   steps.forEach((step, i) => {
     const info = playlistStepLabel(step);
@@ -1433,7 +1474,8 @@ function renderPlaylistRunbar(s) {
       '<span class="pl-car-body">' +
         '<span class="pl-car-name">' + escapeHtml(info.name) + '</span>' +
         '<span class="pl-car-prof">' + escapeHtml(info.profileText) + '</span>' +
-      '</span>';
+      '</span>' +
+      (step.note ? '<span class="pl-car-note" title="Notiz vorhanden">📝</span>' : '');
     rowEl.addEventListener('click', () => send({ type: 'admin', action: 'playlistGoto', index: i }));
     track.appendChild(rowEl);
   });
