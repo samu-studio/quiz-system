@@ -200,6 +200,11 @@
         <input id="score-step" type="number" value="1" min="1" step="1" class="score-step-input" />
       </div>
       <div id="master-players" class="device-list"></div>
+      <!-- Fokus-Ueberwachung: Bildschirme der Spieler zuordnen (nur sichtbar, wenn aktiv und Bildschirme da sind) -->
+      <div id="focus-screens" class="focus-screens hidden">
+        <p class="muted small">Weitere Bildschirme (Zuordnung zu Spielern):</p>
+        <div id="focus-screen-list"></div>
+      </div>
       <!-- Nur-Master-Modus: lokale Teilnehmer ohne eigenes Geraet anlegen -->
       <div id="local-player-add" class="local-player-add hidden">
         <input id="local-player-name" type="text" maxlength="24" placeholder="Name (leer = automatisch)" />
@@ -317,20 +322,6 @@
         <p id="pl-msg" class="muted small"></p>
       </section>
 
-      <!-- Gesamt-Backup: alle Spiel-Profile + Titel/Design/Spielplan/Teams (kein Passwort) -->
-      <section class="panel backup-panel">
-        <details class="mini-menu">
-          <summary class="btn btn-ghost small">⋮ Gesamt-Backup (alle Spiele)</summary>
-          <div class="mini-menu-list">
-            <button id="backup-export" class="btn btn-ghost small" type="button">⬇️ Alles exportieren</button>
-            <label class="btn btn-ghost small mini-menu-file">⬆️ Datei importieren…
-              <input id="backup-import-file" type="file" accept="application/json,.json" hidden />
-            </label>
-          </div>
-        </details>
-        <p id="backup-msg" class="muted small"></p>
-      </section>
-
       <section class="panel">
         <h3>Spiel &amp; Profil wählen</h3>
         <p class="muted small">Wähle das aktive Spiel und dessen Profil. Für Detail-Einstellungen „⚙️ Konfigurieren".</p>
@@ -345,6 +336,21 @@
           <span id="game-sort-hint" class="muted small hidden">Karten am ⠿ ziehen zum Umsortieren</span>
         </label>
         <div id="game-list" class="game-list"></div>
+      </section>
+
+      <!-- Gesamt-Backup: alle Spiel-Profile + Titel/Design/Spielplan/Teams (kein Passwort) -->
+      <section class="panel backup-panel">
+        <details class="mini-menu">
+          <summary class="btn btn-ghost small">⋮ Gesamt-Backup (alle Spiele)</summary>
+          <div class="mini-menu-list">
+            <button id="backup-export" class="btn btn-ghost small" type="button">⬇️ Alles exportieren</button>
+            <label class="btn btn-ghost small mini-menu-file">⬆️ Datei importieren…
+              <input id="backup-import-file" type="file" accept="application/json,.json" hidden />
+            </label>
+          </div>
+        </details>
+        <p class="muted small">ℹ️ Das Backup enthält nur Einstellungen und Texte. Bilder, Audio-/Musikdateien und eigene Sounds werden <strong>nicht</strong> exportiert – im Backup steht nur der Dateiname. Beim Wechsel auf einen anderen PC bitte die Ordner <code>public/backgrounds</code>, <code>audio</code>, <code>music</code> und <code>soundboard</code> separat mitkopieren (oder <code>GetOldData</code> nutzen).</p>
+        <p id="backup-msg" class="muted small"></p>
       </section>
     </div>
 
@@ -402,6 +408,14 @@
               <select id="dz-theme"></select>
             </label>
           </div>
+          <div class="design-grid">
+            <label>Farben von Vorlage laden
+              <select id="dz-loadpreset"></select>
+            </label>
+          </div>
+          <div class="field-label" style="margin-top:.6rem">Eigene Farb-Presets</div>
+          <div id="dz-slots" class="dz-slots"></div>
+          <p class="design-hint">Laden übernimmt Farben, Ecken, Glow &amp; Schrift in „Eigenes (Custom)". 💾 speichert die aktuellen Custom-Werte sofort in den Platz.</p>
           <p class="design-hint">„Eigenes (Custom)" schaltet die Farb-, Form- &amp; Schrift-Regler frei. Hintergrund-Stil und Bildschirm-Effekte wirken auf jeder Vorlage.</p>
         </div>
 
@@ -766,6 +780,28 @@
       <div id="music-pausegames" class="music-pausegames"></div>
     </section>
 
+    <!-- Fokus-Ueberwachung: sieht der Master, wer die Seite / den Bildschirm verlaesst -->
+    <section class="panel">
+      <div class="sb-toggle-row">
+        <span class="sb-toggle-label">👁 Fokus-Überwachung</span>
+        <label class="switch">
+          <input type="checkbox" id="focus-switch" />
+          <span class="switch-track"><span class="switch-thumb"></span></span>
+        </label>
+      </div>
+      <p class="muted small">Zeigt dir live, wenn ein Spieler die Spieler-Seite oder seinen Bildschirm verlässt (Tab-/App-Wechsel, Fenster nicht im Vordergrund). Statuswechsel erscheinen als kleine Meldungen und als Symbol in der Geräteliste. Kein Protokoll, keine Konsequenzen. Bildschirme werden Spielern automatisch per IP zugeordnet; sonst fragst du sie im Tab „🎮 Controls“ per „Wer bist du?“ oder ordnest sie dort selbst zu.</p>
+      <div id="focus-options" class="hidden">
+        <label class="row"><input type="checkbox" id="focus-notify" /> Spieler informieren (Hinweis auf der Seite + Meldung nach der Rückkehr)</label>
+        <div class="cd-ctrl-row">
+          <label>Karenzzeit <input id="focus-tolerance" type="number" min="0" max="30" step="0.5" value="1.5" class="score-step-input" /> Sekunden <span class="muted small">(kürzeres Weggehen zählt nicht)</span></label>
+        </div>
+        <div class="row-buttons">
+          <button id="focus-ask-all" class="btn btn-ghost small" type="button">❓ „Wer bist du?“ an alle unzugeordneten Bildschirme</button>
+          <button id="focus-ask-clear" class="btn btn-ghost small" type="button">Popups zurückziehen</button>
+        </div>
+      </div>
+    </section>
+
     <!-- Nur-Master-Modus: kein Spieler-Handy noetig, Master steuert stellvertretend -->
     <section class="panel">
       <div class="sb-toggle-row">
@@ -896,6 +932,7 @@
 <script src="/js/fun.js"></script>
 <script src="/js/wheel.js"></script>
 <script src="/js/music.js"></script>
+<script src="/js/focus.js"></script>
 <script src="/js/registry.js"></script>
 </body>
 </html>

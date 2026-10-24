@@ -14,6 +14,7 @@ function createWordlistScreen(root, ctx) {
   const headingEl = root.querySelector('[data-el="heading"]');
   const progressEl = root.querySelector('[data-el="progress"]');
   const listEl = root.querySelector('[data-el="list"]');
+  let count = 0;
   let prev = [];   // vorheriger Aufdeck-Zustand -> neu aufgedeckte Felder animieren
 
   function update(s) {
@@ -35,9 +36,25 @@ function createWordlistScreen(root, ctx) {
       listEl.appendChild(item);
     });
     prev = wl.entries.map((e) => e.revealed);
+    count = wl.entries.length;
+    fitColumns();
   }
 
-  return { update };
+  // Tatsaechlich belegte Spaltenzahl ermitteln und Liste auf diese Breite
+  // zusammenziehen -> bei Umbruch (z.B. 6 Woerter = 3x2) mittig statt links.
+  function fitColumns() {
+    if (!count) return;
+    const colW = window.innerWidth <= 480 ? 130 : 230, gap = 16;
+    const maxW = Math.min(1600, window.innerWidth * 0.96);
+    const maxCols = Math.max(1, Math.floor((maxW + gap) / (colW + gap)));
+    const rows = Math.ceil(count / Math.min(maxCols, count));
+    const cols = Math.ceil(count / rows);
+    listEl.style.columns = cols;
+    listEl.style.width = (cols < maxCols ? cols * colW + (cols - 1) * gap : maxW) + 'px';
+  }
+  window.addEventListener('resize', fitColumns);
+
+  return { update, destroy() { window.removeEventListener('resize', fitColumns); } };
 }
 
 // --- Spieler: nur Eingabefeld + Sende-Button + Freigabe-Status --------------
@@ -131,6 +148,23 @@ function createWordlistMaster(root, ctx) {
     });
   });
 
+  // zu langes Wort: hin- und herlaufen lassen, damit es komplett lesbar ist;
+  // bei Groessenaenderung (Drehen, Fensterbreite) neu gemessen
+  function fitWords() {
+    playersEl.querySelectorAll('.wl-pword').forEach((box) => {
+      const inner = box.firstChild;
+      box.classList.remove('scroll');
+      const over = inner.scrollWidth - box.clientWidth;
+      if (over > 2) {
+        box.classList.add('scroll');
+        inner.style.setProperty('--wl-shift', '-' + over + 'px');
+        inner.style.setProperty('--wl-dur', Math.max(4, over / 25 + 3) + 's');
+      }
+    });
+  }
+  if (window.ResizeObserver) new ResizeObserver(fitWords).observe(playersEl);
+  else window.addEventListener('resize', fitWords);
+
   function update(s) {
     const wl = s.game.wl || { entries: [], unlocked: {}, revealedCount: 0, total: 0 };
     const lastWords = s.game.wlLastWords || {};   // nur im Master-Snapshot
@@ -148,16 +182,22 @@ function createWordlistMaster(root, ctx) {
         '<span class="dev-dot' + (p.online ? ' online' : '') + '"><span class="led"></span></span>' +
         avatarChip(p) +
         '<span class="wl-pname">' + escapeHtml(p.name) + '</span>' +
-        '<span class="wl-pword">' + (last ? escapeHtml(last) : '—') + '</span>';
+        '<span class="wl-pword"><span class="wl-pword-in">' + (last ? escapeHtml(last) : '—') + '</span></span>';
       const btn = document.createElement('button');
       btn.className = 'btn small ' + (unlocked ? 'btn-danger' : 'btn-success');
       btn.textContent = unlocked ? 'Sperren' : 'Freigeben';
       btn.addEventListener('click', () =>
         ctx.send({ type: 'master', action: 'wlSetLock', clientId: p.id, locked: unlocked }));
       row.appendChild(btn);
+      // Antipp auf ein zu langes (laufendes) Wort -> volles Wort im Popup
+      row.querySelector('.wl-pword').addEventListener('click', (e) => {
+        if (last && e.currentTarget.classList.contains('scroll'))
+          confirmModal(last, { title: p.name, okText: 'Schließen', cancelText: 'Abbrechen' });
+      });
       playersEl.appendChild(row);
     });
     if (players.length === 0) playersEl.innerHTML = '<p class="muted small">Noch keine Spieler verbunden.</p>';
+    fitWords();
 
     // Wortliste: volle Loesung + einzelne Auf-/Zudeck-Buttons
     countEl.textContent = wl.revealedCount + '/' + wl.total;

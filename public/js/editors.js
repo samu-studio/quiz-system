@@ -7,7 +7,7 @@
 // So gehen beim Tippen keine Fokus-/Cursorpositionen durch Re-Render verloren –
 // neu gerendert wird nur bei strukturellen Aenderungen (Frage/Antwort +/-).
 // ---------------------------------------------------------------------------
-function mcqBlankQuestion() { return { q: '', answers: ['', ''], correct: 0 }; }
+function mcqBlankQuestion() { return { q: '', answers: ['', ''], correct: 0, corrects: [0] }; }
 
 function buildMcqEditor(container) {
   container.classList.add('mcq-editor');
@@ -20,7 +20,9 @@ function setMcqData(container, arr) {
   container._mcq = src.map((q) => ({
     q: typeof q.q === 'string' ? q.q : '',
     answers: Array.isArray(q.answers) ? q.answers.map((a) => String(a)) : ['', ''],
-    correct: Number.isInteger(q.correct) ? q.correct : 0
+    correct: Number.isInteger(q.correct) ? q.correct : 0,
+    corrects: Array.isArray(q.corrects) && q.corrects.length ? q.corrects.slice()
+      : [Number.isInteger(q.correct) ? q.correct : 0]
   }));
   if (container._mcq.length === 0) container._mcq = [mcqBlankQuestion()];
   renderMcqEditor(container);
@@ -32,12 +34,13 @@ function syncMcqFromDom(container) {
   container.querySelectorAll('.mcq-card').forEach((card) => {
     const q = card.querySelector('.mcq-q').value;
     const answers = [];
-    let correct = 0;
+    const corrects = [];
     card.querySelectorAll('.mcq-answer').forEach((row, i) => {
       answers.push(row.querySelector('.mcq-a').value);
-      if (row.querySelector('.mcq-correct').checked) correct = i;
+      if (row.querySelector('.mcq-correct').checked) corrects.push(i);
     });
-    arr.push({ q, answers, correct });
+    if (!corrects.length) corrects.push(0);
+    arr.push({ q, answers, correct: corrects[0], corrects });
   });
   container._mcq = arr;
 }
@@ -47,11 +50,10 @@ function syncMcqFromDom(container) {
 function getMcqData(container) {
   syncMcqFromDom(container);
   return container._mcq.map((q) => {
-    const correctText = q.answers[q.correct];
     const answers = q.answers.map((a) => a.trim()).filter(Boolean);
-    let correct = answers.indexOf((correctText || '').trim());
-    if (correct < 0) correct = 0;
-    return { q: q.q.trim(), answers, correct };
+    let corrects = q.corrects.map((ci) => answers.indexOf((q.answers[ci] || '').trim())).filter((ci) => ci >= 0);
+    if (!corrects.length) corrects = [0];
+    return { q: q.q.trim(), answers, correct: corrects[0], corrects };
   }).filter((q) => q.q && q.answers.length >= 2);
 }
 
@@ -95,11 +97,10 @@ function renderMcqEditor(container) {
       row.className = 'mcq-answer';
 
       const radio = document.createElement('input');
-      radio.type = 'radio';
+      radio.type = 'checkbox';   // mehrere richtige Antworten moeglich
       radio.className = 'mcq-correct';
-      radio.name = container.id + '-q' + qi;   // pro Frage eindeutige Gruppe
-      radio.checked = ai === q.correct;
-      radio.title = 'Als richtige Antwort markieren';
+      radio.checked = q.corrects.includes(ai);
+      radio.title = 'Als richtige Antwort markieren (mehrere möglich)';
       row.appendChild(radio);
 
       const aInput = document.createElement('input');
@@ -120,7 +121,9 @@ function renderMcqEditor(container) {
         syncMcqFromDom(container);
         const qq = container._mcq[qi];
         qq.answers.splice(ai, 1);
-        if (qq.correct >= qq.answers.length) qq.correct = 0;
+        qq.corrects = qq.corrects.filter((c) => c !== ai).map((c) => (c > ai ? c - 1 : c));
+        if (!qq.corrects.length) qq.corrects = [0];
+        qq.correct = qq.corrects[0];
         renderMcqEditor(container);
       });
       row.appendChild(rm);
@@ -485,6 +488,11 @@ function renderPairsEditor(container) {
   head.className = 'pair-head';
   head.innerHTML = '<span>Links (z. B. Person)</span><span>Rechts (z. B. Erfindung)</span>';
   container.appendChild(head);
+
+  const hint = document.createElement('div');
+  hint.className = 'muted small pairs-legend';
+  hint.innerHTML = '<b>Links</b> = feste Felder (Spalte, auf die zugeordnet wird). <b>Rechts</b> = Kärtchen, die die Spieler auf ein linkes Feld ziehen.';
+  container.appendChild(hint);
 
   data.forEach((it, i) => {
     const row = document.createElement('div');

@@ -47,10 +47,149 @@ function roFlowHtml(order, textOf) {
     '</div>').join('');
 }
 
-// --- Drag-to-Reorder via Pointer Events (Touch + Maus) einer einzelnen Liste --
+// --- Gemeinsame Drag-Steuerung (Pointer Events, Touch + Maus) -----------------
+// Maus: Ziehen startet sofort. Touch/Stift: Ziehen am Griff (⠿) startet sofort, auf
+// dem restlichen Kaertchen erst nach kurzem Halten – ein normaler Wisch scrollt so
+// weiterhin die Seite (wichtig bei vielen Kaertchen). Waehrend des Ziehens scrollt
+// die Seite automatisch, wenn der Finger/Zeiger am oberen/unteren Rand ist.
+// h = { start(card, x, y), move(x, y), end() }
+function roScrollParent(el) {
+  for (let p = el.parentElement; p && p !== document.body && p !== document.documentElement; p = p.parentElement) {
+    const o = getComputedStyle(p).overflowY;
+    if ((o === 'auto' || o === 'scroll') && p.scrollHeight > p.clientHeight) return p;
+  }
+  return null;   // = Fenster
+}
+
+function roDragController(roots, isEnabled, h) {
+  const HOLD_MS = 220, SLOP = 10, EDGE = 90, MAX_STEP = 20;
+  let pending = null;
+  let active = false;
+  let last = { x: 0, y: 0 };
+  let raf = 0;
+  let scroller = null;
+
+  function cancelPending() {
+    if (!pending) return;
+    clearTimeout(pending.timer);
+    pending = null;
+    window.removeEventListener('pointermove', onPendingMove);
+    window.removeEventListener('pointerup', cancelPending);
+    window.removeEventListener('pointercancel', cancelPending);
+  }
+  function onPendingMove(e) {
+    if (!pending || e.pointerId !== pending.id) return;
+    last = { x: e.clientX, y: e.clientY };
+    if (Math.hypot(e.clientX - pending.x, e.clientY - pending.y) > SLOP) cancelPending();   // Wisch -> Browser scrollt
+  }
+
+  function onDown(e) {
+    if (active || pending) return;
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    const card = e.target.closest('.ro-card.draggable');
+    if (!card || !isEnabled()) return;
+    last = { x: e.clientX, y: e.clientY };
+    if (e.pointerType === 'mouse' || e.target.closest('.ro-handle')) {
+      e.preventDefault();
+      begin(card, e.pointerId);
+      return;
+    }
+    pending = {
+      card, id: e.pointerId, x: e.clientX, y: e.clientY,
+      timer: setTimeout(() => {
+        const c = pending && pending.card, id = pending && pending.id;
+        cancelPending();
+        if (c && c.isConnected && isEnabled()) {
+          try { if (navigator.vibrate) navigator.vibrate(15); } catch (err) {}
+          begin(c, id);
+        }
+      }, HOLD_MS)
+    };
+    window.addEventListener('pointermove', onPendingMove);
+    window.addEventListener('pointerup', cancelPending);
+    window.addEventListener('pointercancel', cancelPending);
+  }
+
+  function begin(card, pointerId) {
+    active = true;
+    scroller = roScrollParent(card);
+    h.start(card, last.x, last.y);
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+    window.addEventListener('pointercancel', onUp);
+    window.addEventListener('touchmove', blockTouch, { passive: false });
+    raf = requestAnimationFrame(tick);
+  }
+  function blockTouch(e) { if (e.cancelable) e.preventDefault(); }
+  function onMove(e) {
+    if (!active) return;
+    e.preventDefault();
+    last = { x: e.clientX, y: e.clientY };
+    h.move(last.x, last.y);
+  }
+  function onUp() {
+    if (!active) return;
+    finish();
+    h.end();
+  }
+  function finish() {
+    active = false;
+    cancelAnimationFrame(raf);
+    window.removeEventListener('pointermove', onMove);
+    window.removeEventListener('pointerup', onUp);
+    window.removeEventListener('pointercancel', onUp);
+    window.removeEventListener('touchmove', blockTouch);
+  }
+
+  // Auto-Scroll am Rand; danach Platzhalter neu berechnen (Seite hat sich unter dem Zeiger bewegt).
+  function tick() {
+    if (!active) return;
+    let vt = 0, vb = window.innerHeight;
+    if (scroller) { const r = scroller.getBoundingClientRect(); vt = Math.max(vt, r.top); vb = Math.min(vb, r.bottom); }
+    let dy = 0;
+    if (last.y < vt + EDGE) dy = -MAX_STEP * Math.min(1, (vt + EDGE - last.y) / EDGE);
+    else if (last.y > vb - EDGE) dy = MAX_STEP * Math.min(1, (last.y - (vb - EDGE)) / EDGE);
+    if (dy) {
+      dy = dy < 0 ? Math.min(-1, Math.round(dy)) : Math.max(1, Math.round(dy));
+      if (scroller) scroller.scrollTop += dy; else window.scrollBy(0, dy);
+      h.move(last.x, last.y);
+    }
+    raf = requestAnimationFrame(tick);
+  }
+
+  const noMenu = (e) => { if (e.target.closest && e.target.closest('.ro-card.draggable')) e.preventDefault(); };
+  roots.forEach((r) => { r.addEventListener('pointerdown', onDown); r.addEventListener('contextmenu', noMenu); });
+  return {
+    dragging: () => active,
+    destroy() {
+      roots.forEach((r) => { r.removeEventListener('pointerdown', onDown); r.removeEventListener('contextmenu', noMenu); });
+      cancelPending();
+      if (active) { finish(); h.end(true); }
+    }
+  };
+}
+
+// Schwebende Kopie + Platzhalter fuer einen Drag aufbauen.
+function roDragVisuals(card, x, y) {
+  const rect = card.getBoundingClientRect();
+  const ghost = card.cloneNode(true);
+  ghost.classList.add('ro-ghost');
+  ghost.style.width = rect.width + 'px';
+  ghost.style.left = rect.left + 'px';
+  ghost.style.top = rect.top + 'px';
+  document.body.appendChild(ghost);
+  const placeholder = document.createElement('div');
+  placeholder.className = 'ro-placeholder';
+  placeholder.style.height = rect.height + 'px';
+  card.parentNode.insertBefore(placeholder, card);
+  card.classList.add('dragging');
+  card.style.display = 'none';
+  return { card, ghost, placeholder, offX: x - rect.left, offY: y - rect.top };
+}
+
+// --- Drag-to-Reorder einer einzelnen Liste -----------------------------------
 // Gemeinsam von Spieler-Board und Master-Selbstspiel-Board genutzt: `onChange`
-// wird mit der neuen ID-Reihenfolge aufgerufen, sobald sich per Drag etwas
-// verschoben hat (nicht erst beim Loslassen – fuehlt sich direkter an).
+// wird mit der neuen ID-Reihenfolge aufgerufen, sobald losgelassen wurde.
 function roMakeSortable(listEl, isEnabled, onChange) {
   let drag = null;
 
@@ -58,71 +197,34 @@ function roMakeSortable(listEl, isEnabled, onChange) {
     return Array.from(listEl.querySelectorAll('.ro-card'));
   }
 
-  function onPointerDown(e) {
-    const card = e.target.closest('.ro-card.draggable');
-    if (!card || !isEnabled()) return;
-    e.preventDefault();
-    const rect = card.getBoundingClientRect();
-    const ghost = card.cloneNode(true);
-    ghost.classList.add('ro-ghost');
-    ghost.style.width = rect.width + 'px';
-    ghost.style.left = rect.left + 'px';
-    ghost.style.top = rect.top + 'px';
-    document.body.appendChild(ghost);
-    const placeholder = document.createElement('div');
-    placeholder.className = 'ro-placeholder';
-    placeholder.style.height = rect.height + 'px';
-    listEl.insertBefore(placeholder, card);
-    card.classList.add('dragging');
-    card.style.display = 'none';
-
-    drag = { card, ghost, placeholder, offX: e.clientX - rect.left, offY: e.clientY - rect.top };
-    try { card.setPointerCapture(e.pointerId); } catch (err) {}
-    card.addEventListener('pointermove', onPointerMove);
-    card.addEventListener('pointerup', onPointerUp);
-    card.addEventListener('pointercancel', onPointerUp);
-  }
-
-  function onPointerMove(e) {
-    if (!drag) return;
-    e.preventDefault();
-    drag.ghost.style.left = (e.clientX - drag.offX) + 'px';
-    drag.ghost.style.top = (e.clientY - drag.offY) + 'px';
-    // Platzhalter an die Position verschieben, ueber deren Kaertchen-Mitte
-    // der Zeiger gerade schwebt (Vergleich der Y-Mittelpunkte).
-    const y = e.clientY;
-    const others = cardsArray().filter((c) => c !== drag.placeholder && c !== drag.card);
-    let before = null;
-    for (const c of others) {
-      const r = c.getBoundingClientRect();
-      if (y < r.top + r.height / 2) { before = c; break; }
+  const ctl = roDragController([listEl], isEnabled, {
+    start(card, x, y) { drag = roDragVisuals(card, x, y); },
+    move(x, y) {
+      if (!drag) return;
+      drag.ghost.style.left = (x - drag.offX) + 'px';
+      drag.ghost.style.top = (y - drag.offY) + 'px';
+      // Platzhalter vor das erste Kaertchen setzen, dessen Mitte unter dem Zeiger liegt.
+      let before = null;
+      for (const c of cardsArray()) {
+        if (c === drag.placeholder || c === drag.card) continue;
+        const r = c.getBoundingClientRect();
+        if (y < r.top + r.height / 2) { before = c; break; }
+      }
+      listEl.insertBefore(drag.placeholder, before);
+    },
+    end(aborted) {
+      if (!drag) return;
+      const { card, ghost, placeholder } = drag;
+      drag = null;
+      if (placeholder.parentNode) placeholder.parentNode.insertBefore(card, placeholder);
+      if (placeholder.parentNode) placeholder.parentNode.removeChild(placeholder);
+      card.classList.remove('dragging');
+      card.style.display = '';
+      if (ghost.parentNode) ghost.parentNode.removeChild(ghost);
+      if (!aborted) onChange(cardsArray().map((c) => c.dataset.id));
     }
-    if (before) listEl.insertBefore(drag.placeholder, before);
-    else listEl.appendChild(drag.placeholder);
-  }
-
-  function onPointerUp() {
-    if (!drag) return;
-    const { card, ghost, placeholder } = drag;
-    listEl.insertBefore(card, placeholder);
-    listEl.removeChild(placeholder);
-    card.classList.remove('dragging');
-    card.style.display = '';
-    card.removeEventListener('pointermove', onPointerMove);
-    card.removeEventListener('pointerup', onPointerUp);
-    card.removeEventListener('pointercancel', onPointerUp);
-    if (ghost.parentNode) ghost.parentNode.removeChild(ghost);
-    drag = null;
-    onChange(cardsArray().map((c) => c.dataset.id));
-  }
-
-  listEl.addEventListener('pointerdown', onPointerDown);
-  return {
-    destroy() {
-      listEl.removeEventListener('pointerdown', onPointerDown);
-      if (drag && drag.ghost && drag.ghost.parentNode) drag.ghost.parentNode.removeChild(drag.ghost);
-    }
-  };
+  });
+  return ctl;
 }
 
 // --- Staffel-Modus (s. lib/staffel.js): Brett + Pool ---------------------------
@@ -162,80 +264,44 @@ function roStaffelDnD(boardEl, poolEl, isEnabled, onChange) {
   poolEl.dataset.stDrop = 'pool';
   let drag = null;
 
-  function onDown(e) {
-    const card = e.target.closest('.ro-card.draggable');
-    if (!card || !isEnabled()) return;
-    e.preventDefault();
-    const rect = card.getBoundingClientRect();
-    const ghost = card.cloneNode(true);
-    ghost.classList.add('ro-ghost');
-    ghost.style.width = rect.width + 'px';
-    ghost.style.left = rect.left + 'px';
-    ghost.style.top = rect.top + 'px';
-    document.body.appendChild(ghost);
-    const placeholder = document.createElement('div');
-    placeholder.className = 'ro-placeholder';
-    placeholder.style.height = rect.height + 'px';
-    card.parentNode.insertBefore(placeholder, card);
-    card.style.display = 'none';
-    drag = { card, ghost, placeholder, offX: e.clientX - rect.left, offY: e.clientY - rect.top };
-    window.addEventListener('pointermove', onMove);
-    window.addEventListener('pointerup', onUp);
-    window.addEventListener('pointercancel', onUp);
-  }
-
-  function onMove(e) {
-    if (!drag) return;
-    e.preventDefault();
-    drag.ghost.style.left = (e.clientX - drag.offX) + 'px';
-    drag.ghost.style.top = (e.clientY - drag.offY) + 'px';
-    const el = document.elementFromPoint(e.clientX, e.clientY);
-    const zone = el && el.closest('[data-st-drop]');
-    if (!zone) return;
-    if (zone.dataset.stDrop === 'pool') { poolEl.appendChild(drag.placeholder); return; }
-    // Brett: Platzhalter vor das erste Kaertchen setzen, dessen Mitte unter dem Zeiger liegt.
-    let before = null;
-    for (const c of boardEl.querySelectorAll('.ro-card')) {
-      if (c === drag.card) continue;
-      const r = c.getBoundingClientRect();
-      if (e.clientY < r.top + r.height / 2) { before = c; break; }
+  return roDragController([boardEl, poolEl], isEnabled, {
+    start(card, x, y) { drag = roDragVisuals(card, x, y); },
+    move(x, y) {
+      if (!drag) return;
+      drag.ghost.style.left = (x - drag.offX) + 'px';
+      drag.ghost.style.top = (y - drag.offY) + 'px';
+      const el = document.elementFromPoint(x, y);
+      const zone = el && el.closest('[data-st-drop]');
+      if (!zone) return;
+      if (zone.dataset.stDrop === 'pool') { poolEl.appendChild(drag.placeholder); return; }
+      // Brett: Platzhalter vor das erste Kaertchen setzen, dessen Mitte unter dem Zeiger liegt.
+      let before = null;
+      for (const c of boardEl.querySelectorAll('.ro-card')) {
+        if (c === drag.card) continue;
+        const r = c.getBoundingClientRect();
+        if (y < r.top + r.height / 2) { before = c; break; }
+      }
+      boardEl.insertBefore(drag.placeholder, before);
+    },
+    end(aborted) {
+      if (!drag) return;
+      const { card, ghost, placeholder } = drag;
+      drag = null;
+      placeholder.parentNode.insertBefore(card, placeholder);
+      placeholder.parentNode.removeChild(placeholder);
+      card.classList.remove('dragging');
+      card.style.display = '';
+      if (ghost.parentNode) ghost.parentNode.removeChild(ghost);
+      if (aborted) return;
+      const toBoard = card.parentNode === boardEl;
+      card.classList.toggle('draft', toBoard);
+      // Nur ein Entwurf: ein zuvor eingesetztes anderes Wort zurueck in den Pool.
+      boardEl.querySelectorAll('.ro-card.draft').forEach((c) => {
+        if (c !== card || !toBoard) { c.classList.remove('draft'); poolEl.appendChild(c); }
+      });
+      onChange(Array.from(boardEl.querySelectorAll('.ro-card')).map((c) => c.dataset.id));
     }
-    boardEl.insertBefore(drag.placeholder, before);
-  }
-
-  function onUp() {
-    if (!drag) return;
-    const { card, ghost, placeholder } = drag;
-    window.removeEventListener('pointermove', onMove);
-    window.removeEventListener('pointerup', onUp);
-    window.removeEventListener('pointercancel', onUp);
-    placeholder.parentNode.insertBefore(card, placeholder);
-    placeholder.parentNode.removeChild(placeholder);
-    card.style.display = '';
-    if (ghost.parentNode) ghost.parentNode.removeChild(ghost);
-    drag = null;
-    const toBoard = card.parentNode === boardEl;
-    card.classList.toggle('draft', toBoard);
-    // Nur ein Entwurf: ein zuvor eingesetztes anderes Wort zurueck in den Pool.
-    boardEl.querySelectorAll('.ro-card.draft').forEach((c) => {
-      if (c !== card || !toBoard) { c.classList.remove('draft'); poolEl.appendChild(c); }
-    });
-    onChange(Array.from(boardEl.querySelectorAll('.ro-card')).map((c) => c.dataset.id));
-  }
-
-  boardEl.addEventListener('pointerdown', onDown);
-  poolEl.addEventListener('pointerdown', onDown);
-  return {
-    dragging: () => !!drag,
-    destroy() {
-      boardEl.removeEventListener('pointerdown', onDown);
-      poolEl.removeEventListener('pointerdown', onDown);
-      window.removeEventListener('pointermove', onMove);
-      window.removeEventListener('pointerup', onUp);
-      window.removeEventListener('pointercancel', onUp);
-      if (drag && drag.ghost && drag.ghost.parentNode) drag.ghost.parentNode.removeChild(drag.ghost);
-    }
-  };
+  });
 }
 
 // --- Spieler: Liste per Drag & Drop umsortieren -------------------------------
@@ -343,7 +409,7 @@ function createRoPlayer(root, ctx) {
     items.forEach((it) => { textOf[it.id] = it.text; });
 
     const sig = ro.phase + '|' + items.map((it) => it.id).join(',') + '|' + (locked ? 'L' : 'U');
-    if (builtFor !== sig) {
+    if (builtFor !== sig && !sortable.dragging()) {
       const mine = s.game.roMyAnswer;
       order = (Array.isArray(mine) && mine.length === items.length) ? mine.slice() : items.map((it) => it.id);
       const marks = {};

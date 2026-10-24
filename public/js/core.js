@@ -245,8 +245,9 @@ setInterval(() => {
 function startApp() {
   showView(role);
   if (role === 'player') { setupPlayerName(); setupPlayerAvatar(); setupPlayerReactions(); setupPlayerPoll(); }
-  if (role === 'master') { setupMasterControls(); setupTabs(); setupConfigTab(); setupDesignTab(); setupPauseTab(); setupFunTab(); setupWheel(); setupMusic(); setupGate(); }
+  if (role === 'master') { setupMasterControls(); setupTabs(); setupConfigTab(); setupDesignTab(); setupPauseTab(); setupFunTab(); setupWheel(); setupMusic(); setupFocusMaster(); setupGate(); }
   if (role === 'screen') { requestWakeLock(); setupScreenAudioUnlock(); setupScreenVolume(); }
+  setupFocus();
   connect();
 }
 
@@ -292,6 +293,7 @@ function onMessage(msg) {
     clientId = msg.clientId;
     localStorage.setItem('quizClientId_' + role, clientId);
     connected = true; updateSelfStatus();
+    focusOnWelcome();
   } else if (msg.type === 'state') {
     latestState = msg;
     if (msg.admin) latestAdmin = msg.admin;
@@ -308,6 +310,10 @@ function onMessage(msg) {
     playSoundboardSound(msg);
   } else if (msg.type === 'soundboardStop') {
     stopSoundboardSounds();
+  } else if (msg.type === 'focusEvent') {
+    focusOnEvent(msg);
+  } else if (msg.type === 'focusNotice') {
+    focusOnNotice();
   }
 }
 
@@ -496,6 +502,7 @@ function applyState(s) {
   }
 
   applyDisco(!!s.game.disco);
+  focusOnState(s);
 
   if (role === 'screen') { hypeApplySettings(s.settings.hype); renderScreen(s); }
   else if (role === 'master') { renderFunTab(s); renderMaster(s); }
@@ -1563,9 +1570,12 @@ function renderDevices(s) {
       kick.title = 'Entfernen';
       kick.addEventListener('click', () => send({ type: 'master', action: 'kick', clientId: p.id }));
 
-      row.append(dot, avatarEl, name, teamSel, minus, input, plus, kick);
+      const focusEl = document.createElement('span');
+      focusEl.className = 'dev-focus';
+
+      row.append(dot, avatarEl, name, focusEl, teamSel, minus, input, plus, kick);
       dl.appendChild(row);
-      renderDevices._rows[p.id] = { dot, avatarEl, name, input, teamSel };
+      renderDevices._rows[p.id] = { dot, avatarEl, name, input, teamSel, focusEl };
     });
     renderDevices._sig = sig;
     renderDevices._teamsSig = null;   // Optionen der neuen Selects gleich neu füllen
@@ -1585,6 +1595,8 @@ function renderDevices(s) {
     r.avatarEl.textContent = p.avatar || '';
     r.avatarEl.style.setProperty('--p-col', p.color || 'var(--panel-2)');
     r.name.textContent = p.name;
+    const fb = focusBadgeText(p);
+    if (r.focusEl._h !== fb) { r.focusEl._h = fb; r.focusEl.innerHTML = fb; }
     const val = String(scores[p.id] || 0);
     if (document.activeElement !== r.input && r.input.value !== val) r.input.value = val;
     if (rebuildOpts) fillTeamOptions(r.teamSel, teamDefs);

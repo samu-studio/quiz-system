@@ -279,7 +279,7 @@ function createZuPlayer(root, ctx) {
     const isActive = !!s.game.staffelMyTurn;
     stCanDrag = !!st && !reveal && isActive && st.status === 'working' && !locked;
     stBannerEl.classList.toggle('hidden', !st);
-    poolEl.classList.toggle('hidden', !!st && reveal);   // Staffel: es bleibt nichts uebrig (keine Ablenker)
+    poolEl.classList.toggle('hidden', !!st && reveal && !(zu.distractors && zu.distractors.length));   // Staffel: nur die Ablenker bleiben uebrig
     stSubmitEl.classList.toggle('hidden', !stCanDrag);
     if (st) {
       stSubmitEl.disabled = !st.draft;
@@ -559,7 +559,7 @@ function createZuMaster(root, ctx) {
       hintEl.textContent = 'Keine Zuordnungen in diesem Profil. Lege sie im Tab „🎲 Spiele" → „⚙️ Konfigurieren" an.';
     } else if (phase === 'lobby') {
       hintEl.textContent = totalLefts + ' Zuordnung' + (totalLefts === 1 ? '' : 'en') + ' bereit · ' + (cfg ? cfg.punkte : '?') +
-        (cfgStaffel ? ' Punkte je richtigem Zug (Staffel, im Team geteilt; nur vollständige Paare).' : ' Punkte je Treffer.');
+        (cfgStaffel ? ' Punkte je richtigem Zug (Staffel, im Team geteilt; Ablenker und „keine Verbindung" sind Köder).' : ' Punkte je Treffer.');
     } else if (phase === 'matching' && stMode) {
       hintEl.textContent = 'Das aktive Team ordnet je Zug ein Kärtchen zu. Unten bewerten; „Auflösen" bricht ohne Punkte ab.';
     } else if (phase === 'matching') {

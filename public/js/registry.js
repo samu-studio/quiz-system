@@ -139,7 +139,7 @@ const GAMES = {
       { key: 'rechtsLabel', label: 'Überschrift rechte Spalte', type: 'text', maxlength: 40, placeholder: 'z. B. Erfindung' },
       { key: 'modus', label: 'Modus', type: 'select', options: [
         { value: 'normal', label: 'Normal (alle ordnen gleichzeitig zu)' },
-        { value: 'staffel', label: 'Staffel (Teams/Spieler reihum, je Zug ein Kärtchen – Ablenker und „keine Verbindung" entfallen)' }
+        { value: 'staffel', label: 'Staffel (Teams/Spieler reihum, je Zug ein Kärtchen – Ablenker und „keine Verbindung" bleiben als Köder)' }
       ] },
       { key: 'punkte', label: 'Punkte pro richtiger Zuordnung (Staffel: pro richtigem Zug, im Team geteilt)', type: 'number', min: 1, max: 100000, step: 10 },
       { key: 'mischen', label: 'Rechte Kärtchen mischen', type: 'bool' },

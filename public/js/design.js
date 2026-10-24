@@ -350,7 +350,7 @@ function readColorsFromRows() {
 
 // Alle Regler -> Design-Objekt
 function gatherDesign() {
-  const g = { colors: readColorsFromRows() };
+  const g = { colors: readColorsFromRows(), slots: dzSlots };
   g.radius = +document.getElementById('dz-radius').value;
   g.glow = +document.getElementById('dz-glow').value;
   g.font = document.getElementById('dz-font').value;
@@ -476,6 +476,9 @@ function populateDesignForm() {
   document.getElementById('dz-dim').value = design.screen.imageDim;
   document.getElementById('dz-blur').value = design.screen.imageBlur;
 
+  dzSlots = (Array.isArray(g.design && g.design.slots) ? g.design.slots : []).concat([null, null, null, null, null]).slice(0, 5);
+  setupPresetLoader();
+  renderDesignSlots();
   dzSelectedBg = design.screen.bgImage || '';
   refreshBgThumbs();
   updateDesignConditionals();
@@ -483,8 +486,93 @@ function populateDesignForm() {
   updatePreviewBox(design);
 }
 
+// ---- Farb-Presets: Vorlagen laden + 5 eigene Platzhalter ----
+let dzSlots = [null, null, null, null, null];
+const DZ_PRESET_KEYS = THEME_ORDER.filter((t) => t !== 'custom');
+
+// Farben/Form einer eingebauten Vorlage aus dem CSS lesen (Quelle der Wahrheit = styles.css)
+function readPresetFromCss(theme) {
+  const el = document.createElement('div');
+  el.setAttribute('data-theme', theme);
+  el.style.display = 'none';
+  document.body.appendChild(el);
+  const cs = getComputedStyle(el);
+  const colors = {};
+  for (const [k] of COLOR_META) colors[k] = cssToHex(cs.getPropertyValue(COLOR_VAR[k]));
+  const glow = parseInt((cs.getPropertyValue('--glow').match(/(\d+)px\s*$/) || [])[1], 10);
+  const radius = parseInt(cs.getPropertyValue('--radius'), 10);
+  const fam = cs.getPropertyValue('--font');
+  el.remove();
+  let font = 'system';
+  for (const f in FONT_STACKS) if (fam.trim() === FONT_STACKS[f]) font = f;
+  return { colors, radius: Number.isFinite(radius) ? radius : 16, glow: Number.isFinite(glow) ? glow : 0, font };
+}
+function cssToHex(v) {
+  v = String(v).trim();
+  if (/^#[0-9a-f]{6}$/i.test(v)) return v.toLowerCase();
+  if (/^#[0-9a-f]{3}$/i.test(v)) return ('#' + v[1] + v[1] + v[2] + v[2] + v[3] + v[3]).toLowerCase();
+  const m = v.match(/(\d+)\D+(\d+)\D+(\d+)/);
+  if (m) return '#' + [m[1], m[2], m[3]].map((n) => (+n).toString(16).padStart(2, '0')).join('');
+  return '#000000';
+}
+function applyPaletteToForm(p) {
+  buildColorRows(p.colors);
+  document.getElementById('dz-radius').value = p.radius;
+  document.getElementById('dz-glow').value = p.glow;
+  document.getElementById('dz-font').value = p.font;
+  document.getElementById('dz-theme').value = 'custom';
+  onDesignInput();
+}
+function renderDesignSlots() {
+  const wrap = document.getElementById('dz-slots');
+  if (!wrap) return;
+  wrap.innerHTML = '';
+  dzSlots.forEach((sl, i) => {
+    const box = document.createElement('div');
+    box.className = 'dz-slot';
+    const sw = document.createElement('div');
+    if (sl) {
+      sw.className = 'sl-sw';
+      ['bg', 'panel', 'accent', 'accent2', 'text'].forEach((k) => { const c = document.createElement('i'); c.style.background = sl.colors[k]; sw.appendChild(c); });
+    } else { sw.className = 'sl-sw empty'; sw.textContent = 'leer'; }
+    const btns = document.createElement('div');
+    btns.className = 'sl-btns';
+    const load = document.createElement('button');
+    load.className = 'btn small'; load.textContent = 'Laden'; load.disabled = !sl;
+    load.addEventListener('click', () => applyPaletteToForm(sl));
+    const save = document.createElement('button');
+    save.className = 'btn small'; save.textContent = '💾'; save.title = 'Aktuelle Custom-Werte hier speichern';
+    save.addEventListener('click', () => {
+      const g = gatherDesign();
+      dzSlots[i] = { colors: g.colors, radius: g.radius, glow: g.glow, font: g.font };
+      renderDesignSlots();
+      // sofort persistieren, ohne die ungespeicherte Vorschau an alle zu senden
+      const saved = normDesign(((latestAdmin && latestAdmin.global) || {}).design);
+      const theme = ((latestAdmin && latestAdmin.global) || {}).theme || 'neon';
+      saved.slots = dzSlots;
+      sendAdmin({ type: 'admin', action: 'settings', settings: { theme, design: saved } });
+    });
+    btns.append(load, save);
+    box.append(sw, btns);
+    wrap.appendChild(box);
+  });
+}
+function setupPresetLoader() {
+  const sel = document.getElementById('dz-loadpreset');
+  if (!sel || sel.dataset.ready) return;
+  sel.dataset.ready = '1';
+  sel.innerHTML = '<option value="">– Vorlage wählen –</option>';
+  DZ_PRESET_KEYS.forEach((t) => { const o = document.createElement('option'); o.value = t; o.textContent = THEME_LABELS[t]; sel.appendChild(o); });
+  sel.addEventListener('change', () => {
+    if (!sel.value) return;
+    applyPaletteToForm(readPresetFromCss(sel.value));
+    sel.value = '';
+  });
+}
+
 function setupDesignTab() {
   ensureDesignOptions();
+  setupPresetLoader();
   // Alle Regler live verdrahten
   ['dz-theme', 'dz-radius', 'dz-glow', 'dz-font', 'dz-bgstyle', 'dz-angle',
     'dz-titlestyle', 'dz-effect', 'dz-speed', 'dz-vignette', 'dz-dim', 'dz-blur'].forEach((id) => {

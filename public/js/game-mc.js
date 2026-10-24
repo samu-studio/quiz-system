@@ -1,4 +1,9 @@
 'use strict';
+
+// Richtige Antwort(en) einer aufgeloesten Frage (mehrere moeglich; Fallback: einzelnes correct).
+function isCorrectOpt(st, i) {
+  return Array.isArray(st.corrects) ? st.corrects.includes(i) : i === st.correct;
+}
 // Spiel: Multiple Choice – Bildschirm/Spieler/Master-Module.
 
 // ===========================================================================
@@ -64,7 +69,7 @@ function createMcScreen(root, ctx) {
       const cell = document.createElement('div');
       let cls = 'mc-cell';
       if (reveal) {
-        if (i === mc.correct) cls += ' correct';
+        if (isCorrectOpt(mc, i)) cls += ' correct';
         else cls += ' dim';
       } else if (i === mc.groupPick) {
         cls += ' chosen';
@@ -150,7 +155,7 @@ function createMcPlayer(root, ctx) {
       let cls = 'mc-choice';
       const chosen = myAnswer === i;
       if (reveal) {
-        if (i === mc.correct) cls += ' correct';
+        if (isCorrectOpt(mc, i)) cls += ' correct';
         else if (chosen) cls += ' wrong';
         else cls += ' dim';
       } else if (chosen) {
@@ -174,7 +179,7 @@ function createMcPlayer(root, ctx) {
     fbEl.className = 'mc-p-feedback';
     if (reveal) {
       if (myAnswer === null) { fbEl.textContent = 'Keine Antwort'; fbEl.classList.add('miss'); }
-      else if (myAnswer === mc.correct) { fbEl.textContent = '✓ Richtig!'; fbEl.classList.add('good'); }
+      else if (isCorrectOpt(mc, myAnswer)) { fbEl.textContent = '✓ Richtig!'; fbEl.classList.add('good'); }
       else { fbEl.textContent = '✗ Leider falsch'; fbEl.classList.add('false'); }
     } else if (myAnswer !== null) {
       fbEl.textContent = 'Antwort gesendet – warte auf die Auflösung';
@@ -265,12 +270,12 @@ function createMcMaster(root, ctx) {
     // der Fragephase (zum Vorlesen), Spieler/Bildschirm dagegen erst beim Auflösen.
     const players = (s.participants || []).filter((p) => p.role === 'player');
     const answers = mc.answers || [];
-    const correctIdx = (typeof s.game.mcCorrect === 'number') ? s.game.mcCorrect : -1;
+    const correctSet = Array.isArray(s.game.mcCorrects) ? s.game.mcCorrects : [];
     if ((phase === 'question' || phase === 'reveal') && answers.length) {
       qEl.textContent = mc.question || '';
       ansEl.innerHTML = '';
       answers.forEach((text, i) => {
-        const isCorrect = i === correctIdx;
+        const isCorrect = correctSet.includes(i);
         const isGroupPick = phase === 'question' && i === mc.groupPick;
         const row = document.createElement('div');
         row.className = 'mc-m-arow' + (isCorrect ? ' correct' : '') + (isGroupPick ? ' chosen' : '');
@@ -302,7 +307,7 @@ function createMcMaster(root, ctx) {
       const chosen = mcAnswers[p.id];
       const hasAns = chosen != null;
       const letter = hasAns ? LETTERS[chosen] : '–';
-      const isCorrect = (phase === 'reveal' && hasAns && chosen === correctIdx);
+      const isCorrect = (phase === 'reveal' && hasAns && correctSet.includes(chosen));
       const row = document.createElement('div');
       row.className = 'mc-m-prow' + (hasAns ? ' answered' : '') +
         (phase === 'reveal' && hasAns ? (isCorrect ? ' correct' : ' wrong') : '');

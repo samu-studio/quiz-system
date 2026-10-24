@@ -101,7 +101,7 @@ function createZdScreen(root, ctx) {
     (zd.answers || []).forEach((text, i) => {
       const cell = document.createElement('div');
       let cls = 'mc-cell';
-      if (reveal) { cls += (i === zd.correct) ? ' correct' : ' dim'; }
+      if (reveal) { cls += isCorrectOpt(zd, i) ? ' correct' : ' dim'; }
       else if (zd.groupPick && i === zd.groupPick.option) { cls += ' chosen'; }
       cell.className = cls;
       const votes = reveal && zd.dist ? (zd.dist[i] || 0) : 0;
@@ -199,7 +199,7 @@ function createZdPlayer(root, ctx) {
       let cls = 'mc-choice';
       const chosen = myAnswer && myAnswer.option === i;
       if (reveal) {
-        if (i === zd.correct) cls += ' correct';
+        if (isCorrectOpt(zd, i)) cls += ' correct';
         else if (chosen) cls += ' wrong';
         else cls += ' dim';
       } else if (chosen) {
@@ -223,7 +223,7 @@ function createZdPlayer(root, ctx) {
     fbEl.className = 'mc-p-feedback';
     if (reveal) {
       if (!myAnswer) { fbEl.textContent = 'Keine Antwort'; fbEl.classList.add('miss'); }
-      else if (myAnswer.option === zd.correct) { fbEl.textContent = '✓ Richtig!'; fbEl.classList.add('good'); }
+      else if (isCorrectOpt(zd, myAnswer.option)) { fbEl.textContent = '✓ Richtig!'; fbEl.classList.add('good'); }
       else { fbEl.textContent = '✗ Leider falsch'; fbEl.classList.add('false'); }
     } else if (myAnswer) {
       fbEl.textContent = '🔒 Antwort gesichert';
@@ -315,13 +315,13 @@ function createZdMaster(root, ctx) {
     // Aktuelle Frage mit markierter Loesung (master-exklusiv als zdCorrect).
     const players = (s.participants || []).filter((p) => p.role === 'player');
     const answers = zd.answers || [];
-    const correctIdx = (typeof s.game.zdCorrect === 'number') ? s.game.zdCorrect : -1;
+    const correctSet = Array.isArray(s.game.zdCorrects) ? s.game.zdCorrects : [];
     if ((phase === 'question' || phase === 'reveal') && answers.length) {
       if (qKey !== zd.number) { qKey = zd.number; startTime = performance.now(); }
       qEl.textContent = zd.question || '';
       ansEl.innerHTML = '';
       answers.forEach((text, i) => {
-        const isCorrect = i === correctIdx;
+        const isCorrect = correctSet.includes(i);
         const isGroupPick = phase === 'question' && zd.groupPick && i === zd.groupPick.option;
         const row = document.createElement('div');
         row.className = 'mc-m-arow' + (isCorrect ? ' correct' : '') + (isGroupPick ? ' chosen' : '');
@@ -356,7 +356,7 @@ function createZdMaster(root, ctx) {
       const a = zdAnswers[p.id];
       const hasAns = a != null;
       const letter = hasAns ? LETTERS[a.option] : '–';
-      const isCorrect = (phase === 'reveal' && hasAns && a.option === correctIdx);
+      const isCorrect = (phase === 'reveal' && hasAns && correctSet.includes(a.option));
       const row = document.createElement('div');
       row.className = 'mc-m-prow' + (hasAns ? ' answered' : '') +
         (phase === 'reveal' && hasAns ? (isCorrect ? ' correct' : ' wrong') : '');
