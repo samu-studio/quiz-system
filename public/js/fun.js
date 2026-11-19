@@ -350,7 +350,7 @@ function renderScreenPoll(s) {
     '<div class="poll-q">📊 ' + escapeHtml(poll.question) + '</div>' +
     '<div class="poll-row poll-ja"><span class="poll-lbl">Ja</span><span class="poll-bar"><span style="width:' + pct(poll.ja) + '%"></span></span><b>' + poll.ja + '</b></div>' +
     '<div class="poll-row poll-nein"><span class="poll-lbl">Nein</span><span class="poll-bar"><span style="width:' + pct(poll.nein) + '%"></span></span><b>' + poll.nein + '</b></div>' +
-    '<div class="poll-foot">' + (poll.status === 'open' ? poll.total + ' Stimme(n) – Abstimmung laeuft …' : 'Ergebnis · ' + poll.total + ' Stimme(n)') + '</div>';
+    '<div class="poll-foot">' + (poll.status === 'open' ? poll.total + ' Stimme(n) – Abstimmung läuft …' : 'Ergebnis · ' + poll.total + ' Stimme(n)') + '</div>';
 }
 
 // Schnellumfrage am Spieler-Handy: nur waehrend der Abstimmung sichtbar, eigene Wahl markiert.
@@ -373,7 +373,7 @@ function renderMasterPoll(s) {
   if (!el) return;
   const poll = s.game && s.game.poll;
   el.textContent = !poll ? 'Keine Umfrage aktiv.'
-    : (poll.status === 'open' ? 'Laeuft: ' : 'Beendet: ') + '„' + poll.question + '“ – Ja ' + poll.ja + ' · Nein ' + poll.nein;
+    : (poll.status === 'open' ? 'Läuft: ' : 'Beendet: ') + '„' + poll.question + '“ – Ja ' + poll.ja + ' · Nein ' + poll.nein;
   $('fun-poll-close').disabled = !poll || poll.status !== 'open';
   $('fun-poll-hide').disabled = !poll;
 }
@@ -385,6 +385,7 @@ function sendFunSettings(patch) {
 let funPollTimer = null;        // Master: Entprellung der Umfrage-Frage
 
 function setupFunTab() {
+  setupFunApps();
   const btn = document.getElementById('fun-flashbang-btn');
   if (btn) btn.addEventListener('click', () => send({ type: 'master', action: 'flashbang' }));
   const q = $('fun-poll-question');
@@ -846,6 +847,7 @@ function setupPlayerPoll() {
 // Master: Hype-Meter-Schalter + Empfindlichkeit sowie die gespeicherten
 // Fun-Eingaben (admin.fun) aus dem Snapshot spiegeln – nie in ein Feld, das gerade bearbeitet wird.
 function renderFunTab(s) {
+  renderFunApps(s);
   const fun = s.admin && s.admin.fun;
   if (fun) {
     const setVal = (id, v) => { const el = $(id); if (el && document.activeElement !== el && el.value !== String(v)) el.value = v; };
@@ -1197,4 +1199,79 @@ function setupFunPopups() {
     send({ type: 'master', action: 'popupShow', clientId: 'all', popup: funPopupType }));
   document.getElementById('fun-popup-clear').addEventListener('click', () =>
     send({ type: 'master', action: 'popupClear', clientId: 'all' }));
+}
+
+// ---------------------------------------------------------------------------
+// Fun-Tab als "Apps": jede .fun-app-Sektion bekommt eine Kachel im Raster
+// (#fun-apps) und oeffnet sich per Klick als Popup. Die Sektionen bleiben im
+// DOM (alle IDs/Handler unveraendert), nur CSS blendet sie ein (.open).
+// Statuspunkt je Kachel aus FUN_APP_STATUS (null = Einmal-Aktion ohne Zustand).
+// ---------------------------------------------------------------------------
+const FUN_APP_STATUS = {
+  flashbang: null,
+  kopfstand: null,
+  sound: null,
+  disco:     (s) => !!(s.game && s.game.disco),
+  msg:       (s) => Object.values((s.game && s.game.messages) || {}).filter((m) => !m.done).length,
+  reactions: (s) => !!(s.settings && s.settings.reactions && s.settings.reactions.enabled),
+  hype:      (s) => !!(s.settings && s.settings.hype && s.settings.hype.enabled),
+  curse:     (s) => (s.participants || []).filter((p) => p.cursed).length,
+  countdown: (s) => !!(s.game && s.game.countdown && s.game.countdown.aktiv),
+  poll:      (s) => !!(s.game && s.game.poll && s.game.poll.status !== 'off'),
+  wheel:     (s) => !!(s.wheel && s.wheel.visible),
+  popups:    (s) => Object.values((s.game && s.game.popups) || {}).filter((p) => !p.done).length
+};
+let funAppOpen = null;
+
+function closeFunApp() {
+  document.querySelectorAll('#tab-fun .fun-app.open').forEach((el) => el.classList.remove('open'));
+  const bd = $('fun-app-backdrop');
+  if (bd) bd.classList.add('hidden');
+  funAppOpen = null;
+}
+
+function openFunApp(id) {
+  closeFunApp();
+  const el = document.querySelector('#tab-fun .fun-app[data-app="' + id + '"]');
+  if (!el) return;
+  el.classList.add('open');
+  $('fun-app-backdrop').classList.remove('hidden');
+  funAppOpen = id;
+}
+
+function setupFunApps() {
+  const grid = $('fun-apps');
+  if (!grid) return;
+  document.querySelectorAll('#tab-fun .fun-app').forEach((sec) => {
+    const id = sec.dataset.app;
+    const t = document.createElement('button');
+    t.type = 'button';
+    t.className = 'fun-tile' + (FUN_APP_STATUS[id] === null ? ' none' : '');
+    t.dataset.app = id;
+    t.innerHTML = '<span class="fun-tile-badge"></span><span class="fun-tile-dot"></span>' +
+      '<span class="fun-tile-emoji">' + sec.dataset.emoji + '</span><span class="fun-tile-title">' + sec.dataset.title + '</span>';
+    t.addEventListener('click', () => openFunApp(id));
+    grid.appendChild(t);
+    // Popup-Kopf mit Titel + Schliessen-Button
+    const head = document.createElement('div');
+    head.className = 'fun-app-head';
+    head.innerHTML = '<span class="fun-app-title">' + sec.dataset.emoji + ' ' + sec.dataset.title + '</span>' +
+      '<button type="button" class="btn btn-ghost small">✖ Schließen</button>';
+    head.querySelector('button').addEventListener('click', closeFunApp);
+    sec.insertBefore(head, sec.firstChild);
+  });
+  $('fun-app-backdrop').addEventListener('click', closeFunApp);
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && funAppOpen) closeFunApp(); });
+}
+
+function renderFunApps(s) {
+  document.querySelectorAll('#fun-apps .fun-tile').forEach((t) => {
+    const fn = FUN_APP_STATUS[t.dataset.app];
+    if (!fn) return;
+    const v = fn(s);
+    t.classList.toggle('on', !!v);
+    const badge = t.querySelector('.fun-tile-badge');
+    const txt = typeof v === 'number' && v > 0 ? String(v) : '';
+    if (badge.textContent !== txt) badge.textContent = txt;
+  });
 }

@@ -1247,7 +1247,32 @@ function scoreStep() {
   return (Number.isFinite(v) && v > 0) ? v : 1;
 }
 
+// Einklappbare Panels im Controls-Tab: selten gebrauchte Detail-Einstellungen
+// (.fold-body) lassen sich je Panel (.foldable[data-fold]) wegklappen, der
+// Haupt-Umschalter im Kopf bleibt sichtbar. Zustand je Geraet in localStorage
+// (Standard: eingeklappt), rein clientseitig.
+function setupFolds() {
+  document.querySelectorAll('.foldable[data-fold]').forEach((panel) => {
+    const btn = panel.querySelector('.fold-btn');
+    if (!btn) return;
+    const key = 'quizFold_' + panel.dataset.fold;
+    const apply = (folded) => {
+      panel.classList.toggle('folded', folded);
+      btn.setAttribute('aria-expanded', folded ? 'false' : 'true');
+    };
+    let folded = true;
+    try { folded = localStorage.getItem(key) !== 'open'; } catch (e) {}
+    apply(folded);
+    btn.addEventListener('click', () => {
+      folded = !folded;
+      apply(folded);
+      try { localStorage.setItem(key, folded ? 'closed' : 'open'); } catch (e) {}
+    });
+  });
+}
+
 function setupTabs() {
+  setupFolds();
   document.querySelectorAll('.tab-btn').forEach((btn) => {
     btn.addEventListener('click', () => switchTab(btn.dataset.tab));
   });
@@ -1264,7 +1289,14 @@ async function switchTab(tab) {
     if (latestState) applyDesign(latestState.settings.theme, latestState.settings.design);
   }
   activeTab = tab;
-  document.querySelectorAll('.tab-btn').forEach((b) => b.classList.toggle('active', b.dataset.tab === tab));
+  document.querySelectorAll('.tab-btn').forEach((b) => {
+    const on = b.dataset.tab === tab;
+    b.classList.toggle('active', on);
+    // Tableiste scrollt auf dem Handy waagerecht – aktiven Tab ins Bild holen.
+    if (on && b.parentElement && b.parentElement.scrollWidth > b.parentElement.clientWidth) {
+      b.parentElement.scrollTo({ left: b.offsetLeft - (b.parentElement.clientWidth - b.offsetWidth) / 2 });
+    }
+  });
   $('tab-game').classList.toggle('hidden', tab !== 'game');
   $('tab-config').classList.toggle('hidden', tab !== 'config');
   $('tab-design').classList.toggle('hidden', tab !== 'design');
@@ -1914,6 +1946,9 @@ function setupPlayerAvatar() {
   });
   document.addEventListener('click', (e) => {
     if (!menu.classList.contains('hidden') && !menu.contains(e.target) && e.target !== toggle) closeMenu();
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !menu.classList.contains('hidden')) { closeMenu(); toggle.focus(); }
   });
 }
 

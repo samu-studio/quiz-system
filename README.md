@@ -207,6 +207,8 @@ Alle Einstellungen werden in `config.json` gespeichert und überstehen einen Neu
 ## Technik (kurz)
 
 - **Server:** `server.js` ist nur der dünne Einstiegspunkt (Server starten, Start-Banner, sauberes Beenden); die eigentliche Logik liegt modular in `lib/` – u. a. `lib/ws-server.js` (selbst implementiertes WebSocket, RFC 6455), `lib/state.js`/`lib/config.js` (Laufzeitzustand/`config.json`), `lib/snapshot.js` (rollenabhängige Snapshots), `lib/handlers/` (Nachrichtenverarbeitung pro Rolle) und `lib/games/<id>.js` (Spiellogik je Spiel). **Keine npm-Abhängigkeiten**, kein `npm install` nötig.
+- **Neustart-fest:** Teilnehmer, Punkte, Teams und der Rundenstand des aktiven Spiels werden in `state.json` gesichert; nach einem Neustart machen Handys einfach weiter (Ausnahme: Kritzelquiz-Zeichnungen und Fun-Tab-Laufzeitzustand).
+- **Schlank im WLAN:** Änderungen werden gebündelt verschickt, Dateien per ETag gecacht und Text (JS/CSS/HTML) gzip-komprimiert; Kritzelquiz-Zeichnungen laufen nicht über den Live-Zustand, sondern als eigene (cachebare) Bilder.
 - **Client:** `public/index.html` (alle drei Ansichten in einer Seite, per Rolle ein-/ausgeblendet) + `public/js/` – klassische, nicht-modulare `<script>`-Dateien in fester Ladereihenfolge, die sich einen globalen Scope teilen (`core.js`, je ein `game-<id>.js`, `config.js`, `editors.js`, `design.js`, zuletzt `registry.js`). `public/styles.css` hält die Theme-Presets.
 - **Netzwerk:** Alle Geräte müssen im selben WLAN/LAN sein.
 

@@ -42,7 +42,7 @@
 <div id="confirm-overlay" class="overlay hidden">
   <div class="overlay-box">
     <h2 id="confirm-title">Bestätigen</h2>
-    <p id="confirm-msg" class="muted"></p>
+    <p id="confirm-msg" class="muted" style="white-space:pre-line"></p>
     <div class="overlay-actions">
       <button id="confirm-cancel" class="btn btn-ghost">Abbrechen</button>
       <button id="confirm-ok" class="btn btn-primary">OK</button>
@@ -270,7 +270,7 @@
     </section>
 
     <!-- 6. Scoreboard am Bildschirm -->
-    <section class="panel scoreboard-panel">
+    <section class="panel scoreboard-panel foldable" data-fold="scoreboard">
       <div class="sb-toggle-row">
         <span class="sb-toggle-label">🏆 Scoreboard am Bildschirm</span>
         <div id="sb-toggle" class="seg">
@@ -280,15 +280,18 @@
           <button class="seg-btn" data-mode="podium">🏆 Podium</button>
         </div>
       </div>
+      <button class="fold-btn" type="button" aria-expanded="true"><span class="fold-arrow">▾</span> Einstellungen</button>
+      <div class="fold-body">
       <p class="muted small">„Podium" zeigt die Top 3 als Sieger-Abschluss. Bei „Vollbild"/„Podium" holt jede Spielsteuerung den Bildschirm automatisch zurück ins Spiel.</p>
       <div class="slider-row" id="sb-scale-row"><label>Textgröße</label><input id="sb-scale" type="range" min="50" max="200" step="5" value="100" /><span class="sv" id="sb-scale-v">100 %</span></div>
       <div class="slider-row" id="podium-speed-row"><label>Podium-Tempo (pro Platz)</label><input id="podium-speed" type="range" min="300" max="3000" step="100" value="900" /><span class="sv" id="podium-speed-v">0.9 s</span></div>
       <button id="podium-replay-btn" class="btn btn-ghost small">🔁 Podium-Enthüllung wiederholen</button>
       <button id="sessionend-replay-btn" class="btn btn-ghost small hidden">🎉 Session-Zusammenfassung erneut zeigen</button>
+      </div>
     </section>
 
     <!-- 7. QR-Code am Bildschirm (Beitritts-URL) – generisch, spielunabhängig -->
-    <section class="panel qr-panel">
+    <section class="panel qr-panel foldable" data-fold="qr">
       <div class="sb-toggle-row">
         <span class="sb-toggle-label">📱 QR-Code am Bildschirm</span>
         <label class="switch">
@@ -296,6 +299,8 @@
           <span class="switch-track"><span class="switch-thumb"></span></span>
         </label>
       </div>
+      <button class="fold-btn" type="button" aria-expanded="true"><span class="fold-arrow">▾</span> Einstellungen</button>
+      <div class="fold-body">
       <p class="muted small">Zeigt die Beitritts-Adresse als QR-Code auf dem Bildschirm – Handys scannen und sind sofort als Spieler dabei, ohne etwas zu tippen.</p>
       <label class="qr-url-row" for="qr-title-input">
         <span class="muted small">Überschrift der QR-Karte (leer = Standardtext)</span>
@@ -305,6 +310,7 @@
         <span class="muted small">Eigene Adresse für den QR-Code (leer = automatisch erkannt)</span>
         <input type="text" id="qr-url-input" class="qr-url-input" placeholder="z. B. https://mein-quiz.de/" />
       </label>
+      </div>
     </section>
   </div>
 
@@ -490,7 +496,7 @@
   <div id="tab-pause" class="tab-panel hidden">
     <section class="panel">
       <h3>⏸ Pause-Bildschirm</h3>
-      <p class="design-hint">Wird am Bildschirm gezeigt, sobald du im Tab „🎮 Controls" die Spieler sperrst (🔒). Die Sperre selbst bleibt unveraendert – hier stellst du nur ein, wie der Bildschirm dabei aussieht.</p>
+      <p class="design-hint">Wird am Bildschirm gezeigt, sobald du im Tab „🎮 Controls" die Spieler sperrst (🔒). Die Sperre selbst bleibt unverändert – hier stellst du nur ein, wie der Bildschirm dabei aussieht.</p>
       <div class="design-body">
 
         <div class="design-section">
@@ -548,33 +554,34 @@
   <div id="tab-fun" class="tab-panel hidden">
     <section class="panel">
       <h3>🎉 Fun</h3>
-      <p class="design-hint">Kleine Spielereien fuer zwischendurch – wirken auf Bildschirm und Spieler-Handys (nicht auf dieses Master-Geraet). Hier kommen mit der Zeit weitere Effekte dazu.</p>
+      <p class="design-hint">Kleine Spielereien für zwischendurch – wirken auf Bildschirm und Spieler-Handys (nicht auf dieses Master-Gerät). Tippe eine App an, um ihre Steuerung zu öffnen. Ein grüner Punkt zeigt, dass sie gerade aktiv ist.</p>
       <div class="design-body">
-        <!-- Kurze Show-Effekte nebeneinander (umbrechend auf schmalen Geraeten) -->
-        <div class="fun-row">
-          <div class="design-section">
+        <!-- App-Raster: Kacheln baut fun.js (setupFunApps) aus den .fun-app-Sektionen;
+             eine Sektion oeffnet sich per Klick als Popup (Klasse .open). -->
+        <div id="fun-apps" class="fun-apps"></div>
+        <div id="fun-app-backdrop" class="fun-app-backdrop hidden"></div>
+          <div class="design-section fun-app" data-app="flashbang" data-emoji="💥" data-title="Flashbang">
             <h4>💥 Flashbang</h4>
-            <p class="design-hint">Blitzt Bildschirm und Spieler-Handys 1 Sekunde lang hell weiss auf und blendet dann ueber 0,5 Sekunden wieder aus.</p>
+            <p class="design-hint">Blitzt Bildschirm und Spieler-Handys 1 Sekunde lang hell weiß auf und blendet dann über 0,5 Sekunden wieder aus.</p>
             <button id="fun-flashbang-btn" class="btn btn-warn big">💥 Flashbang</button>
           </div>
-          <div class="design-section">
+          <div class="design-section fun-app" data-app="kopfstand" data-emoji="🙃" data-title="Kopfstand">
             <h4>🙃 Kopfstand</h4>
-            <p class="design-hint">Stellt die Spieler-Handys 10 Sekunden lang auf den Kopf (180 Grad gedreht) und dreht sie danach wieder zurueck.</p>
+            <p class="design-hint">Stellt die Spieler-Handys 10 Sekunden lang auf den Kopf (180 Grad gedreht) und dreht sie danach wieder zurück.</p>
             <button id="fun-kopfstand-btn" class="btn btn-warn big">🙃 Kopfstand</button>
           </div>
-          <div class="design-section">
+          <div class="design-section fun-app" data-app="disco" data-emoji="🪩" data-title="Disco">
             <h4>🪩 Disco-Modus</h4>
-            <p class="design-hint">Laesst alle Farben auf Bildschirm und Spieler-Handys dauerhaft durch den Farbkreis rotieren (Hue-Rotate), bis du ihn wieder ausschaltest.</p>
+            <p class="design-hint">Lässt alle Farben auf Bildschirm und Spieler-Handys dauerhaft durch den Farbkreis rotieren (Hue-Rotate), bis du ihn wieder ausschaltest.</p>
             <button id="fun-disco-btn" class="btn big">🪩 Disco an</button>
           </div>
-        </div>
 
         <!-- Spieler-Nachrichten: drei frei bearbeitbare Vorlagen (Bild + Text)
              als Overlay auf den Spieler-Handys, an alle oder einzelne Spieler
              (wie die Fake-Popups). S. fun.js renderFunMessages(). -->
-        <div class="design-section">
+        <div class="design-section fun-app" data-app="msg" data-emoji="💬" data-title="Nachricht">
           <h4>💬 Nachricht an Spieler</h4>
-          <p class="design-hint">Vorlage bearbeiten (wird automatisch gespeichert), auswaehlen und dann an alle oder einzelne Spieler senden. Auf das Bild tippen, um es zu wechseln. Weggeklickte Nachrichten werden in der Liste als ✅ angezeigt.</p>
+          <p class="design-hint">Vorlage bearbeiten (wird automatisch gespeichert), auswählen und dann an alle oder einzelne Spieler senden. Auf das Bild tippen, um es zu wechseln. Weggeklickte Nachrichten werden in der Liste als ✅ angezeigt.</p>
 
           <div id="msg-presets" class="msg-presets"></div>
 
@@ -595,7 +602,7 @@
           <div id="msg-list" class="fun-popup-list"></div>
         </div>
         <!-- Emoji-Reaktionen: Spieler koennen jederzeit ein Emoji abschicken, das am Bildschirm aufschwebt -->
-        <div class="design-section">
+        <div class="design-section fun-app" data-app="reactions" data-emoji="😀" data-title="Reaktionen">
           <div class="sb-toggle-row">
             <span class="sb-toggle-label">😀 Emoji-Reaktionen</span>
             <label class="switch">
@@ -617,9 +624,9 @@
             <input class="aq-vol-slider" id="reactions-volume" type="range" min="0" max="100" step="1" value="50" />
             <span class="aq-vol-val" id="reactions-volume-val">50 %</span>
           </div>
-          <p class="design-hint">Spieler koennen jederzeit ein Emoji abschicken, das am Bildschirm aufschwebt. Jede Reaktion kann auf Wunsch des Spielers zusaetzlich einen kurzen Sound am Bildschirm ausloesen.</p>
+          <p class="design-hint">Spieler können jederzeit ein Emoji abschicken, das am Bildschirm aufschwebt. Jede Reaktion kann auf Wunsch des Spielers zusätzlich einen kurzen Sound am Bildschirm auslösen.</p>
         </div>
-        <div class="design-section">
+        <div class="design-section fun-app" data-app="hype" data-emoji="🚂" data-title="Hype-Train">
           <div class="sb-toggle-row">
             <span class="sb-toggle-label">🚂 Hype-Meter / Hype-Train</span>
             <label class="switch">
@@ -627,7 +634,7 @@
               <span class="switch-track"><span class="switch-thumb"></span></span>
             </label>
           </div>
-          <p class="design-hint">Applausometer am Bildschirm: Schicken die Spieler viele Emoji-Reaktionen, erscheint oben ein kleiner Balken, der sich fuellt. Ist er voll, faehrt der Hype-Train eine Stufe hoeher. Ebbt die Stimmung ab, verschwindet er wieder. Braucht aktivierte Emoji-Reaktionen (oben).</p>
+          <p class="design-hint">Applausometer am Bildschirm: Schicken die Spieler viele Emoji-Reaktionen, erscheint oben ein kleiner Balken, der sich füllt. Ist er voll, fährt der Hype-Train eine Stufe höher. Ebbt die Stimmung ab, verschwindet er wieder. Braucht aktivierte Emoji-Reaktionen (oben).</p>
           <div class="sb-toggle-row">
             <span class="sb-toggle-label">Empfindlichkeit</span>
             <div id="hype-sensitivity" class="seg">
@@ -638,15 +645,15 @@
           </div>
           <p id="hype-reactions-off" class="muted small hidden">⚠️ Emoji-Reaktionen sind gerade ausgeschaltet – der Hype-Meter bekommt so keine Daten.</p>
         </div>
-        <div class="design-section">
+        <div class="design-section fun-app" data-app="curse" data-emoji="🃏" data-title="Sabotage">
           <h4>🃏 Sabotage-Karte</h4>
           <p class="design-hint">Verflucht einen Spieler: Er kann keine Eingaben mehr machen und sein Handy wird verschwommen und grau, bis du den Fluch wieder aufhebst.</p>
           <div id="fun-curse-list" class="curse-list"></div>
           <button id="fun-uncurse-all" class="btn" type="button">✨ Alle Flüche aufheben</button>
         </div>
-        <div class="design-section">
+        <div class="design-section fun-app" data-app="countdown" data-emoji="⏱️" data-title="Countdown">
           <h4>⏱️ Countdown</h4>
-          <p class="design-hint">Blendet am Bildschirm einen grossen Countdown ein. In den letzten Sekunden piept es, bei 0 ertoent ein Signal. Bleibt nach Ablauf stehen, bis du ihn ausblendest.</p>
+          <p class="design-hint">Blendet am Bildschirm einen großen Countdown ein. In den letzten Sekunden piept es, bei 0 ertönt ein Signal. Bleibt nach Ablauf stehen, bis du ihn ausblendest.</p>
           <div class="cd-ctrl-row">
             <label>Sekunden <input id="fun-cd-sek" type="number" min="1" max="5999" step="1" value="10" class="score-step-input" /></label>
             <span class="cd-presets">
@@ -668,7 +675,7 @@
         </div>
         <!-- Soundboard: Antippen spielt den Sound NUR am Bildschirm (s. fun.js / lib/soundboard.js).
              Mitgelieferte Sounds: public/sounds/soundboard/, eigene: public/soundboard/. -->
-        <div class="design-section">
+        <div class="design-section fun-app" data-app="sound" data-emoji="🔊" data-title="Soundboard">
           <h4>🔊 Soundboard</h4>
           <p class="design-hint">Antippen spielt den Sound am Bildschirm ab. Mehrere Sounds dürfen sich überlagern, ⏹ stoppt alle.</p>
           <div class="sb-topbar">
@@ -689,9 +696,9 @@
             <span id="sb-upload-msg" class="muted small"></span>
           </div>
         </div>
-        <div class="design-section">
+        <div class="design-section fun-app" data-app="poll" data-emoji="📊" data-title="Umfrage">
           <h4>📊 Schnellumfrage</h4>
-          <p class="design-hint">Schickt eine Ja/Nein-Frage an alle Spieler-Handys. Das Ergebnis erscheint klein oben links am Bildschirm (live waehrend der Abstimmung, nach dem Beenden als Endergebnis).</p>
+          <p class="design-hint">Schickt eine Ja/Nein-Frage an alle Spieler-Handys. Das Ergebnis erscheint klein oben links am Bildschirm (live während der Abstimmung, nach dem Beenden als Endergebnis).</p>
           <label>Frage
             <input id="fun-poll-question" type="text" maxlength="120" placeholder="Ja oder Nein?" />
           </label>
@@ -703,7 +710,7 @@
           <div class="slider-row"><label>Größe am Bildschirm</label><input id="fun-poll-scale" type="range" min="50" max="300" step="10" value="100" /><span class="sv" id="fun-poll-scale-v">100 %</span></div>
           <p id="fun-poll-status" class="muted small">Keine Umfrage aktiv.</p>
         </div>
-        <div class="design-section">
+        <div class="design-section fun-app" data-app="wheel" data-emoji="🎡" data-title="Glücksrad">
           <h4>🎡 Glücksrad</h4>
           <p class="design-hint">Blendet ein Glücksrad auf dem Bildschirm ein. Felder sind entweder ausgewählte Spieler oder freie Texte (eine Zeile = ein Feld). Der Server lost das Ergebnis aus, der Bildschirm dreht.</p>
           <div id="wheel-mode" class="seg">
@@ -729,9 +736,9 @@
           </div>
           <p id="wheel-info" class="muted small"></p>
         </div>
-        <div class="design-section">
+        <div class="design-section fun-app" data-app="popups" data-emoji="🪟" data-title="Fake-Popups">
           <h4>🪟 Fake-Popups</h4>
-          <p class="design-hint">Schaltet einzelnen Spielern (oder allen) ein nerviges „echtes" Popup aufs Handy – Cookie-Banner, AGB, Captcha &amp; Co. Der Spieler muss es erst wegklicken, bevor er weiterspielen kann. Erst Popup-Art waehlen, dann senden.</p>
+          <p class="design-hint">Schaltet einzelnen Spielern (oder allen) ein nerviges „echtes" Popup aufs Handy – Cookie-Banner, AGB, Captcha &amp; Co. Der Spieler muss es erst wegklicken, bevor er weiterspielen kann. Erst Popup-Art wählen, dann senden.</p>
           <div id="fun-popup-types" class="seg fun-popup-types"></div>
           <div class="fun-popup-all">
             <button id="fun-popup-all" class="btn btn-primary">📢 An alle senden</button>
@@ -811,7 +818,7 @@
           <span class="switch-track"><span class="switch-thumb"></span></span>
         </label>
       </div>
-      <p class="muted small">Ohne Spieler-Handys spielen: im Tab „🎮 Controls" erscheinen zusaetzliche Stellvertreter-Steuerungen, und im Geraete-Menue kannst du lokale Teilnehmer ohne eigenes Geraet anlegen. Echte Spieler koennen trotzdem jederzeit dazustossen.</p>
+      <p class="muted small">Ohne Spieler-Handys spielen: im Tab „🎮 Controls" erscheinen zusätzliche Stellvertreter-Steuerungen, und im Geräte-Menü kannst du lokale Teilnehmer ohne eigenes Gerät anlegen. Echte Spieler können trotzdem jederzeit dazustossen.</p>
     </section>
 
     <!-- Session-Endscreen: welche Fun-Fact-Kacheln gezeigt werden + manueller Reset -->
@@ -819,7 +826,7 @@
       <div class="sb-toggle-row">
         <span class="sb-toggle-label">🎉 Session-Endscreen: Fun Facts</span>
       </div>
-      <p class="muted small">Am Ende des Spielplans zeigt der Bildschirm eine Zusammenfassung. Waehle, welche Fun-Fact-Kacheln dabei erscheinen.</p>
+      <p class="muted small">Am Ende des Spielplans zeigt der Bildschirm eine Zusammenfassung. Wähle, welche Fun-Fact-Kacheln dabei erscheinen.</p>
       <div id="sessionfacts-list" class="admin-body">
         <label class="row"><input type="checkbox" id="sf-fastest" checked /> ⚡ Schnellste Reaktion/Buzz</label>
         <label class="row"><input type="checkbox" id="sf-jump" checked /> 🚀 Größter Punktesprung</label>

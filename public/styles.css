@@ -748,7 +748,9 @@ html.disco { animation: discoHue 4s linear infinite; }
   flex: none; border: none; background: transparent; cursor: pointer;
   width: var(--rx-size); height: var(--rx-size);
   font-size: calc(var(--rx-size) * .58); line-height: 1;
-  display: flex; align-items: center; justify-content: center; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center; border-radius: 999px;
+  /* Breite ist durch die Zeile begrenzt – wenigstens die Hoehe als Tippflaeche ausreizen. */
+  min-height: 2.75rem;
 }
 .emoji-reaction-btn:hover { background: var(--panel-2); }
 .emoji-reaction-btn:active { transform: scale(1.2); }
@@ -834,8 +836,12 @@ html.disco { animation: discoHue 4s linear infinite; }
   display: flex; align-items: center; gap: .6rem;
   padding: .4rem .7rem; background: var(--panel-2); border-radius: var(--radius);
 }
-.device-row .dname { flex: 1; font-weight: 600; }
-.device-row .kick { color: var(--danger); background: transparent; border: none; cursor: pointer; font-weight: 700; }
+.device-row .dname { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; font-weight: 600; }
+.device-row .kick {
+  flex: none; min-width: 2.2rem; min-height: 2.2rem; margin-left: .5rem; border-radius: 50%;
+  color: var(--danger); background: transparent; border: 1px solid var(--border); cursor: pointer; font-weight: 700;
+}
+.device-row .kick:hover { border-color: var(--danger); }
 .row-buttons { display: flex; gap: .6rem; flex-wrap: wrap; }
 .local-player-add { display: flex; flex-wrap: wrap; gap: .5rem; margin-bottom: .6rem; }
 .local-player-add input {
@@ -877,19 +883,20 @@ html.disco { animation: discoHue 4s linear infinite; }
 .avatar-btn:active { transform: scale(.96); }
 .avatar-menu {
   position: absolute; top: calc(100% + .5rem); left: 0; z-index: 20;
-  width: min(280px, 82vw); background: var(--panel); border: 1px solid var(--border);
+  width: min(330px, 90vw); background: var(--panel); border: 1px solid var(--border);
   border-radius: var(--radius); box-shadow: var(--shadow); padding: .8rem;
   display: flex; flex-direction: column; gap: .7rem;
 }
 .avatar-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: .35rem; }
 .avatar-emoji-btn {
-  width: 2.1rem; height: 2.1rem; border-radius: 50%; border: 1px solid transparent;
-  background: var(--panel-2); font-size: 1.1rem; line-height: 1; cursor: pointer;
+  width: 100%; aspect-ratio: 1; border-radius: 50%; border: 1px solid transparent;
+  background: var(--panel-2); font-size: 1.35rem; line-height: 1; cursor: pointer;
   display: flex; align-items: center; justify-content: center;
 }
 .avatar-emoji-btn:hover { border-color: var(--border); }
 .avatar-emoji-btn.selected { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent) inset; }
-.avatar-colors { display: flex; flex-wrap: wrap; gap: .5rem; }
+.avatar-colors { display: grid; grid-template-columns: repeat(8, 1fr); gap: .4rem; }
+.avatar-colors .color-swatch { width: 100%; height: auto; aspect-ratio: 1; }
 .color-swatch {
   --p-col: var(--panel-2);
   width: 1.7rem; height: 1.7rem; border-radius: 50%; cursor: pointer;
@@ -940,9 +947,15 @@ html.disco { animation: discoHue 4s linear infinite; }
 .self-dot.online .led { background: var(--success); box-shadow: 0 0 8px var(--success); }
 
 /* ---- Master: Tabs ---- */
-.tabbar { display: flex; gap: .5rem; padding: .8rem 1rem 0; }
+.tabbar {
+  display: flex; gap: .5rem; padding: .8rem 1rem 0;
+  /* Auf schmalen Handys passen nicht alle Tabs nebeneinander: die Leiste scrollt
+     dann waagerecht (ohne sichtbaren Balken), statt die Seite zu verbreitern. */
+  overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch;
+}
+.tabbar::-webkit-scrollbar { display: none; }
 .tab-btn {
-  flex: 1; padding: .7em 1em; font: inherit; font-weight: 700; cursor: pointer;
+  flex: 1 0 auto; white-space: nowrap; padding: .7em 1em; font: inherit; font-weight: 700; cursor: pointer;
   color: var(--muted); background: var(--panel-2);
   border: 1px solid var(--border); border-bottom: none;
   border-radius: var(--radius) var(--radius) 0 0;
@@ -1834,6 +1847,14 @@ html.disco { animation: discoHue 4s linear infinite; }
 .estq-legend { margin-top: .2rem; }
 
 @media (max-width: 480px) {
+  .tabbar { gap: .35rem; padding: .6rem .6rem 0; }
+  .tab-btn { padding: .6em .75em; font-size: .92rem; }
+  /* Schmal: Name in der ersten Zeile, Punkte-Regler + Entfernen rechtsbuendig darunter. */
+  .device-row { flex-wrap: wrap; justify-content: flex-end; gap: .4rem; padding: .4rem .5rem; }
+  .device-row .dname { flex: 1 1 calc(100% - 5rem); }
+  .device-row .kick { margin-left: 0; }
+  .slider-row { flex-wrap: wrap; row-gap: .2rem; }
+  .slider-row > label { flex: 1 0 100%; min-width: 0; }
   .control-grid { grid-template-columns: 1fr; }
   .wl-list { columns: 130px; }
   .mc-answers { grid-template-columns: 1fr; }
@@ -1883,6 +1904,7 @@ html.disco { animation: discoHue 4s linear infinite; }
   font: inherit; font-weight: 800; padding: .5em 1em; cursor: pointer; box-shadow: var(--glow) var(--accent);
 }
 .aq-activate.hidden { display: none; }
+#screen-audio-activate { right: 1rem; }
 
 /* ---- Bildschirm: Maximal-Lautstaerke (linker Rand, nur bei Maus-Hover) ---- */
 .screen-volume {
@@ -2427,7 +2449,7 @@ html.disco { animation: discoHue 4s linear infinite; }
 
 .slider-row { display: flex; align-items: center; gap: .7rem; margin-bottom: .6rem; }
 .slider-row > label { min-width: 150px; font-size: .9rem; }
-.slider-row input[type="range"] { flex: 1; }
+.slider-row input[type="range"] { flex: 1; min-width: 0; }
 .slider-row .sv { min-width: 54px; text-align: right; font-variant-numeric: tabular-nums; font-weight: 700; }
 
 .design-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: .8rem; }
@@ -3000,3 +3022,54 @@ html.disco { animation: discoHue 4s linear infinite; }
   border: 2px solid var(--accent); border-radius: 12px; padding: .5em .9em; display: inline-flex; align-items: center; gap: .4em;
 }
 .claim-btn:hover { background: var(--accent); color: #000; }
+
+/* ---- Fun-Tab als App-Raster: Kacheln + Popup je App (fun.js setupFunApps) ---- */
+.fun-apps { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: .8rem; }
+.fun-tile {
+  position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: .35rem;
+  padding: .9rem .4rem; min-height: 96px; background: var(--panel-2); color: var(--text);
+  border: 1px solid var(--border); border-radius: var(--radius); font: inherit; cursor: pointer;
+  transition: transform .12s, border-color .12s;
+}
+.fun-tile:hover { transform: translateY(-2px); border-color: var(--accent); }
+.fun-tile.on { border-color: var(--good, #3ddc84); }
+.fun-tile-emoji { font-size: 2rem; line-height: 1; }
+.fun-tile-title { font-size: .82rem; font-weight: 600; text-align: center; }
+.fun-tile-dot {
+  position: absolute; top: .45rem; right: .45rem; width: .7rem; height: .7rem; border-radius: 50%;
+  background: var(--muted); opacity: .35;
+}
+.fun-tile.on .fun-tile-dot { background: var(--good, #3ddc84); opacity: 1; box-shadow: 0 0 8px var(--good, #3ddc84); }
+.fun-tile.none .fun-tile-dot { display: none; }
+.fun-tile-badge {
+  position: absolute; top: .3rem; left: .4rem; min-width: 1.2rem; padding: 0 .3rem; border-radius: 99px;
+  background: var(--accent); color: var(--bg, #000); font-size: .7rem; font-weight: 700; text-align: center;
+}
+.fun-tile-badge:empty { display: none; }
+/* Sektion ist normalerweise versteckt, .open macht daraus ein zentriertes Popup */
+#tab-fun .fun-app { display: none; }
+#tab-fun .fun-app.open {
+  display: block; position: fixed; z-index: 1001; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  width: min(640px, calc(100vw - 1.5rem)); max-height: calc(100vh - 2rem); overflow-y: auto;
+  box-shadow: 0 20px 60px rgba(0,0,0,.6); margin: 0;
+}
+.fun-app-backdrop { position: fixed; inset: 0; z-index: 1000; background: rgba(0,0,0,.6); backdrop-filter: blur(3px); }
+.fun-app-backdrop.hidden { display: none; }
+.fun-app-head { display: flex; align-items: center; justify-content: space-between; gap: .6rem; margin-bottom: .6rem; }
+.fun-app-head .fun-app-title { font-size: 1.15rem; font-weight: 700; }
+.fun-app > h4:first-of-type { display: none; }
+
+/* Alle Standard-Regler in der Akzentfarbe des Themes (statt Browser-Blau). */
+input[type="range"] { accent-color: var(--accent); }
+
+/* Einklappbare Detail-Einstellungen im Controls-Tab (setupFolds in core.js). */
+.fold-btn {
+  display: inline-flex; align-items: center; gap: .4em; margin-top: .5rem; padding: .35em .2em;
+  background: transparent; border: none; color: var(--muted); font: inherit; font-size: .9rem;
+  font-weight: 700; cursor: pointer;
+}
+.fold-btn:hover { color: var(--text); }
+.fold-arrow { display: inline-block; transition: transform .15s ease; }
+.foldable.folded .fold-arrow { transform: rotate(-90deg); }
+.foldable.folded .fold-body { display: none; }
+.fold-body { margin-top: .4rem; }

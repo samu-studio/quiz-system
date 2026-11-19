@@ -48,9 +48,19 @@ function setupConfigTab() {
     if (!(await confirmModal('Profil „' + name + '" wirklich löschen?', { title: 'Profil löschen', okText: 'Löschen', danger: true }))) return;
     sendAdmin({ type: 'admin', action: 'deleteProfile', game: configGame, name });
   });
-  $('profile-save').addEventListener('click', () => {
+  $('profile-save').addEventListener('click', async () => {
     const name = $('profile-name').value.trim();
     if (!name) { setConfigMsg('Bitte einen Profilnamen angeben.'); return; }
+    // Unvollstaendige Eintraege wuerden stillschweigend verworfen -> vorher warnen.
+    const problems = gatherIncompleteEntries();
+    if (problems.length) {
+      const shown = problems.slice(0, 12);
+      const more = problems.length > shown.length ? '\n… und ' + (problems.length - shown.length) + ' weitere' : '';
+      const ok = await confirmModal(
+        'Diese Einträge sind unvollständig und werden NICHT gespeichert:\n\n• ' + shown.join('\n• ') + more,
+        { title: '⚠️ Unvollständige Einträge', okText: 'Trotzdem speichern', cancelText: 'Zurück zum Bearbeiten', danger: true });
+      if (!ok) return;
+    }
     // Nach dem Speichern im gerade gespeicherten Profil bleiben (auch bei „Speichern
     // unter neuem Namen"); das Aktiv-Flag bleibt unberuehrt (kein activate).
     configProfile = name;
@@ -729,6 +739,17 @@ function gatherConfigFields() {
     else if (f.type === 'audioq') out[f.key] = getAudioqData(el);
     else if (f.type === 'bildwahl') out[f.key] = getBildwahlData(el);
     else out[f.key] = parseInt(el.value, 10);
+  });
+  return out;
+}
+
+// Sammelt die Hinweise zu unvollstaendigen Eintraegen aller strukturierten Editoren.
+function gatherIncompleteEntries() {
+  const out = [];
+  GAMES[configGame].fields.forEach((f) => {
+    const el = $('cfg-' + f.key);
+    if (!el) return;
+    findIncompleteEntries(f.type, el).forEach((m) => out.push(m));
   });
   return out;
 }

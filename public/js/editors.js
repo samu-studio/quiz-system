@@ -1458,3 +1458,65 @@ function renderBildwahlEditor(container) {
   row.appendChild(hint);
   container.appendChild(row);
 }
+
+// ---------------------------------------------------------------------------
+// Unvollstaendige Eintraege finden (vor „Profil speichern")
+// ---------------------------------------------------------------------------
+// get*Data() verwirft unvollstaendige Eintraege stillschweigend. Diese Pruefung liefert
+// dafuer Klartext-Hinweise je teilweise ausgefuelltem Eintrag (komplett leere Zeilen
+// zaehlen nicht). Rueckgabe: string[] (leer = alles in Ordnung).
+function findIncompleteEntries(type, el) {
+  const out = [];
+  const s = (v) => String(v == null ? '' : v).trim();
+  if (type === 'mcq') {
+    syncMcqFromDom(el);
+    el._mcq.forEach((q, i) => {
+      const answers = q.answers.map(s).filter(Boolean);
+      if (!s(q.q) && !answers.length) return;
+      if (!s(q.q)) out.push('Frage ' + (i + 1) + ': Fragetext fehlt');
+      else if (answers.length < 2) out.push('Frage ' + (i + 1) + ': mindestens 2 Antworten nötig');
+    });
+  } else if (type === 'cases') {
+    syncCasesFromDom(el);
+    el._cases.forEach((c, i) => {
+      const h = c.hinweise.map(s).filter(Boolean);
+      if (!s(c.loesung) && !h.length) return;
+      if (!s(c.loesung)) out.push('Fall ' + (i + 1) + ': Lösung fehlt');
+      else if (!h.length) out.push('Fall ' + (i + 1) + ': mindestens 1 Hinweis nötig');
+    });
+  } else if (type === 'roq') {
+    syncRoqFromDom(el);
+    el._roq.forEach((q, i) => {
+      const items = q.items.map(s).filter(Boolean);
+      if (!s(q.frage) && !items.length) return;
+      if (!s(q.frage)) out.push('Frage ' + (i + 1) + ': Fragetext fehlt');
+      else if (items.length < 2) out.push('Frage ' + (i + 1) + ': mindestens 2 Einträge nötig');
+    });
+  } else if (type === 'estq') {
+    syncEstqFromDom(el);
+    const num = (v) => { const t = s(v).replace(',', '.'); return t !== '' && Number.isFinite(Number(t)); };
+    el._estq.forEach((q, i) => {
+      const hasQ = !!s(q.q), hasL = num(q.loesung);
+      if (!hasQ && !s(q.loesung)) return;
+      if (!hasQ) out.push('Frage ' + (i + 1) + ': Fragetext fehlt');
+      else if (!hasL) out.push('Frage ' + (i + 1) + ': Lösung fehlt oder ist keine Zahl');
+    });
+  } else if (type === 'audioq') {
+    syncAudioqFromDom(el);
+    el._aq.forEach((r, i) => {
+      const abs = r.abschnitte.filter((a) => s(a.von) !== '' || s(a.bis) !== '');
+      if (!s(r.loesung)) {
+        if (s(r.audio) || abs.length || s(r.stufen)) out.push('Eintrag ' + (i + 1) + ': Lösung fehlt');
+        return;
+      }
+      abs.forEach((a) => {
+        const von = audioqNum(a.von) || 0;
+        const bis = s(a.bis) === '' ? 0 : audioqNum(a.bis);
+        if (!(von >= 0 && Number.isFinite(bis) && (bis === 0 || bis > von))) {
+          out.push('Eintrag ' + (i + 1) + ': ungültiger Abschnitt (' + s(a.von) + '–' + s(a.bis) + ')');
+        }
+      });
+    });
+  }
+  return out;
+}

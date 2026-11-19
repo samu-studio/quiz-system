@@ -76,7 +76,6 @@ function createZmPlayer(root, ctx) {
   let erasing = false;
   let drawing = false;
   let builtRound = null;      // Runden-Kennung (pos), fuer die die Canvas zuletzt geleert wurde
-  let mySubmittedDataUrl = null; // eigenes zuletzt gesendetes Bild (fuer "das bin ich" in der Galerie)
   let undoStack = [];         // ImageData-Schnappschuesse vor jedem Strich/Löschen (Rückgängig)
   let raf = 0;
 
@@ -180,7 +179,6 @@ function createZmPlayer(root, ctx) {
   function submitDrawing() {
     if (canvas.classList.contains('locked')) return;
     const dataUrl = canvas.toDataURL('image/png');
-    mySubmittedDataUrl = dataUrl;
     ctx.send({ type: 'zmSubmit', data: dataUrl });
     canvas.classList.add('locked');
   }
@@ -230,7 +228,6 @@ function createZmPlayer(root, ctx) {
       const submitted = !!s.game.zmMySubmitted;
       if (builtRound !== zm.pos) {
         builtRound = zm.pos;
-        mySubmittedDataUrl = null;
         undoStack = [];
         clearCanvas();
       }
@@ -251,7 +248,7 @@ function createZmPlayer(root, ctx) {
       const myVoteSlot = s.game.zmMyVote != null ? s.game.zmMyVote : null;
       galleryEl.innerHTML = '';
       (zm.entries || []).forEach((entry) => {
-        const isMine = mySubmittedDataUrl && entry.image === mySubmittedDataUrl;
+        const isMine = s.game.zmMySlot != null && s.game.zmMySlot === entry.slotIdx;
         const isVoted = myVoteSlot === entry.slotIdx;
         const cell = document.createElement('button');
         cell.type = 'button';
